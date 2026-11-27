@@ -136,16 +136,6 @@
         else tl.insertBefore(lk, tl.firstChild);
       }
     } // this place's creature look sits at the top of the Look tab
-    {
-      const sp = document.getElementById('style-pick');
-      if (sp)
-        sp.addEventListener('change', () => {
-          if (X.P && X.P.setting && X.P.setting.style !== sp.value) {
-            X.P.setting.style = sp.value;
-            edited('setting');
-          }
-        });
-    } // in a place the one Style picker (Look tab) is also the place's style
     dock.insertBefore(grp, dock.firstChild);
     railModes.unshift(['r-places', 'mode-places']);
     btn.addEventListener('click', () => {
@@ -181,11 +171,7 @@
           .replace(/^-|-$/g, '') || 'place';
       const s = saved();
       s[id] = Object.assign(clone(X.P), { title: name });
-      try {
-        localStorage.setItem(STORE, JSON.stringify(s));
-      } catch (e) {
-        /* */
-      }
+      X.writeSaved(s);
       X.set(id);
     };
     grp.querySelector('#pl-reset').onclick = () => {
@@ -478,39 +464,31 @@
         0,
         1,
         0.05
-      ),
-      range(
-        'Glow',
-        () => st.glow ?? 0.8,
-        (v) => {
-          st.glow = v;
-          S.glow = v;
-          edited();
-        },
-        0,
-        2,
-        0.05
       )
     );
     box.appendChild(kn);
-    const sn = el('div', { class: 'grp' }, '<span class="lbl">Motes</span>');
-    sn.appendChild(
-      seg(
-        'pl-snow',
-        [
-          ['on', 'On'],
-          ['off', 'Off'],
-        ],
-        st.snow ? 'on' : 'off',
-        (v) => {
-          st.snow = v === 'on';
-          S.snow = st.snow;
+  }
+
+  // ---- one control, one truth: the shared controls (Look: Glow, Marine snow, Iris finish, Style; Camera: Tank depth) set S as they do in World. Inside a place the
+  // same change is also written to that place's data (and kept), which applySetting replays, so there is no second copy of them in the Places editor.
+  const BOUND = [
+    ['#glow', 'input', 'glow', () => S.glow],
+    ['#snow', 'click', 'snow', () => !!S.snow],
+    ['input[name="irismode"]', 'change', 'iris', () => S.irisMode],
+    ['#dz', 'input', 'dz', () => S.dz],
+    ['#style-pick', 'change', 'style', () => S.style],
+  ];
+  for (const [sel, ev, key, read] of BOUND)
+    for (const e of document.querySelectorAll(sel))
+      e.addEventListener(ev, () => {
+        const st = X.P && X.P.setting;
+        if (!st) return;
+        const v = read();
+        if (st[key] !== v) {
+          st[key] = v;
           edited();
         }
-      )
-    );
-    box.appendChild(sn);
-  }
+      });
 
   // ---- Cast
   const speciesOptions = (cur) =>

@@ -51,3 +51,11 @@ only warn on motion. A place can set its own limits (`check: { black: 0.92 }` fo
 The headless browser cannot judge frame rate or the finished 3D bodies. For those, open World Scene on the
 device with `?check` (or `?check=garden,trench`; `&settle=ms&measure=ms`): it steps through the places on
 real frames and shows the same report with each frame, and Copy report gives the JSON.
+
+## world-scene-smoke.mjs
+
+`node world-scene-smoke.mjs` (about a minute): does World Scene still hang together after a change? Enters every place, opens every tab, and checks there are no page
+errors, the shot list is in the Camera tab and the place look in the Look tab, the Style picker shows only where a place has a city, Glow reaches the place's data, each
+moment swells and ends, and role state sits under `f.role`. Run it with `world-scene-check.mjs` (the motion and frame scores) before publishing.
+
+Formatting: Prettier, `.prettierrc` at the repo root (width 120); `places/`, `packages/ecology/ecology-roles.js`, `packages/ecology/scene-metrics.js` and `packages/render/ecology-render.js` are formatted.

@@ -179,7 +179,7 @@
         lists = rowLists(P);
       P.cast.forEach((q, i) => {
         if (q.role === 'stream' && q.path === r.path)
-          for (const f of lists[i]) if (f._ps != null) H[((f._ps * 48) | 0) % 48]++;
+          for (const f of lists[i]) if (f.role && f.role.ps != null) H[((f.role.ps * 48) | 0) % 48]++;
       });
       let bi = 0,
         bv = -1;
@@ -302,25 +302,38 @@
 
   // ------------------------------------------------------------------ loading a place
   const STORE = 'forge:world-places';
+  // the edited places live in localStorage; where it is off (a sandboxed frame) places simply are not kept, and say so once
+  let storeWarned = false;
+  const storeFail = (e) => {
+    if (!storeWarned) {
+      storeWarned = true;
+      console.warn('World Scene: places are not kept (storage off):', e && e.message);
+    }
+  };
   const saved = () => {
     try {
       return JSON.parse(localStorage.getItem(STORE) || '{}');
     } catch (e) {
+      storeFail(e);
       return {};
     }
   };
-  const PLACES_V = 5; // the built-in places' version: raise it when they are redesigned
-  function keep() {
+  const writeSaved = (s) => {
     try {
-      const s = saved();
-      if (X.P && X.id !== 'world') {
-        X.P._v = PLACES_V;
-        s[X.id] = X.P;
-      }
       localStorage.setItem(STORE, JSON.stringify(s));
     } catch (e) {
-      /* storage off */
+      storeFail(e);
     }
+  };
+  X.writeSaved = writeSaved;
+  const PLACES_V = 5; // the built-in places' version: raise it when they are redesigned
+  function keep() {
+    const s = saved();
+    if (X.P && X.id !== 'world') {
+      X.P._v = PLACES_V;
+      s[X.id] = X.P;
+    }
+    writeSaved(s);
   }
   function allPlaces() {
     const out = {},
@@ -388,16 +401,12 @@
   function rebuildCity() {
     if (typeof buildPlacedCity !== 'function') return;
     buildPlacedCity(worldCitySeed ?? S.seed, worldTowers);
-    try {
-      refreshVortices();
-      refreshCityGenPanels();
-      curTowerIdx = 0;
-      curTierIdx = 0;
-      populateTowerSelect();
-      renderTowerForms();
-    } catch (e) {
-      /* the tower panel is not up yet */
-    }
+    // the tower panel is in the page by the time a place builds a city; each call is guarded against a host that has not got that panel
+    for (const fn of [refreshVortices, refreshCityGenPanels]) if (typeof fn === 'function') fn();
+    curTowerIdx = 0;
+    curTierIdx = 0;
+    if (typeof populateTowerSelect === 'function') populateTowerSelect();
+    if (typeof renderTowerForms === 'function') renderTowerForms();
   }
   // set the plan, then build where it is wanted: when the depth moved (cityFollowDepth builds with the new plan) or the built city is another plan's
   function placeCity(c, show) {
@@ -449,42 +458,13 @@
       if (b) b.hidden = !st.city;
     }
   }
-  // what the roles keep on a creature (its lane, school, slot, pace, heading...) and the fright it carried in: a creature coming from another
+  // what the roles keep on a creature (f.role: its lane, school, slot, pace, heading, a scare) and the fright it carried in: a creature coming from another
   // place starts clean, or it keeps swimming as it did there (a stale school or slot, an alarm that never decays with the ecosystem off)
-  const ROLE_KEYS = [
-    '_lane',
-    '_ps',
-    '_ph',
-    '_hx',
-    '_hy',
-    '_pace',
-    '_zl',
-    '_g',
-    '_jx',
-    '_jy',
-    '_r',
-    '_zz',
-    '_w',
-    '_bk',
-    '_sd',
-    'sch',
-    'slot',
-    'pace',
-    'lag',
-    'solo',
-    '_bolt',
-    '_bx',
-    '_by',
-  ];
   function forget(f) {
     f.steer = null;
-    for (const k of ROLE_KEYS) f[k] = null;
-    try {
-      f.alarm = 0;
-      f.dashT = 0;
-    } catch (e) {
-      /* engine-held */
-    }
+    f.role = null;
+    f.alarm = 0;
+    f.dashT = 0;
   }
   function applyCast(warm) {
     for (const sp of SPECIES) sim.pop[sp.key] = 0;
@@ -551,11 +531,7 @@
   X.reset = () => {
     const s = saved();
     delete s[X.id];
-    try {
-      localStorage.setItem(STORE, JSON.stringify(s));
-    } catch (e) {
-      /* */
-    }
+    writeSaved(s);
     X.set(X.id);
   };
   X.hides = (layer) =>
@@ -631,18 +607,12 @@
       if (d > rad) continue;
       const a = Math.atan2(dy, dx),
         k = sc.kick ?? 1;
-      f._bolt = 1.8 * k;
-      f._bx = Math.cos(a);
-      f._by = Math.sin(a); // the roles' own heading takes the scare (ecology-roles head)
-      try {
-        f.alarm = k;
-        f.dashT = 0.5 * k + 0.2;
-        f.dashAng = a;
-        f.fleeX = Math.cos(a);
-        f.fleeY = Math.sin(a);
-      } catch (e) {
-        /* engine-held */
-      }
+      f.role = Object.assign(f.role || {}, { bolt: 1.8 * k, bx: Math.cos(a), by: Math.sin(a) }); // the roles' own heading takes the scare (ecology-roles head)
+      f.alarm = k;
+      f.dashT = 0.5 * k + 0.2;
+      f.dashAng = a;
+      f.fleeX = Math.cos(a);
+      f.fleeY = Math.sin(a);
     }
   }
   X.warm = (sec) => {
@@ -952,13 +922,12 @@
   };
   X.step = (dt) => {
     EcologySim.step(sim, dt);
-    try {
-      forgeDriftTick(dt);
-      stepCityWalkers(dt);
-      stepForgeGround(dt);
-    } catch (err) {
-      /* hosts without these */
-    }
+    for (const fn of [
+      typeof forgeDriftTick === 'function' && forgeDriftTick,
+      typeof stepCityWalkers === 'function' && stepCityWalkers,
+      typeof stepForgeGround === 'function' && stepForgeGround,
+    ])
+      if (fn) fn(dt);
     t += dt;
     X.tick(dt);
     updateCamera(dt);

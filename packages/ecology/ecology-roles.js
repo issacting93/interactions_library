@@ -23,10 +23,10 @@
   // the heading eases toward the wanted one, and never turns faster than TURN radians a second: a koi glides round, it does not snap
   const TURN = 1.3;
   function head(f, hx, hy, spd, dt, ease, turn) {
-    if (f._bolt > 0) {
-      f._bolt -= dt;
-      hx = f._bx;
-      hy = f._by;
+    if (R(f).bolt > 0) {
+      R(f).bolt -= dt;
+      hx = R(f).bx;
+      hy = R(f).by;
       spd *= 2.6;
       ease = 5;
       turn = 3.5;
@@ -34,19 +34,19 @@
     const l = Math.hypot(hx, hy) || 1;
     hx /= l;
     hy /= l;
-    if (f._hx == null) {
-      f._hx = Math.cos(f.ang || 0);
-      f._hy = Math.sin(f.ang || 0);
+    if (R(f).hx == null) {
+      R(f).hx = Math.cos(f.ang || 0);
+      R(f).hy = Math.sin(f.ang || 0);
     }
-    const a0 = Math.atan2(f._hy, f._hx),
+    const a0 = Math.atan2(R(f).hy, R(f).hx),
       k = Math.min(1, dt * (ease || 2.2));
-    let a1 = Math.atan2(f._hy + (hy - f._hy) * k, f._hx + (hx - f._hx) * k);
+    let a1 = Math.atan2(R(f).hy + (hy - R(f).hy) * k, R(f).hx + (hx - R(f).hx) * k);
     const mx = (turn || TURN) * dt,
       d = Math.atan2(Math.sin(a1 - a0), Math.cos(a1 - a0));
     a1 = a0 + clamp(d, -mx, mx);
-    f._hx = Math.cos(a1);
-    f._hy = Math.sin(a1);
-    f.steer = { x: f._hx * spd, y: f._hy * spd, keep: true };
+    R(f).hx = Math.cos(a1);
+    R(f).hy = Math.sin(a1);
+    f.steer = { x: R(f).hx * spd, y: R(f).hy * spd, keep: true };
   }
   // along a heading (tx, ty), turned toward a point by how far off it the creature is (in body lengths b; k: how gently)
   function toward(f, tx, ty, px, py, b, k) {
@@ -140,11 +140,14 @@
     deep: [0.55, 0.85],
     bed: [0.94, 0.94],
   };
+  // what the roles keep on a creature (its lane, school, slot, pace, heading, a scare...) lives in f.role, one object a place clears whole: f's own
+  // fields are the sim's (writing f._s broke the creature's motion), so none of these sit on f
+  const R = (f) => f.role || (f.role = {});
   const zOf = (r) => r.z || LAYERS[r.layer] || LAYERS.mid;
   const setZ = (ctx, f, z, k) => (ctx.setZ ? ctx.setZ(f, z, k) : (f.z += (z - f.z) * k));
   const live = (ctx, keys) => ctx.sim.fish.filter((f) => !f.dead && keys.includes(ctx.keyOf(f)));
 
-  // (a creature's place along its path is f._ps: f._s is the sim's own slot in the engine, and writing it broke the creature's motion)
+  // (a creature's place along its path is f.role.ps)
   // along a path, in schools: the row splits into flocks of about r.group (8), each keeping together, aligned and spaced (each creature holds a
   // slot in its school, about 1.6 bodies from its neighbours), the schools at their own lanes and pace along the path, so they pass and drift
   // apart rather than travel as one band. r.group: 1 (or a row under 6) swims as before, one loose band in lanes.
@@ -186,24 +189,24 @@
     const width = Math.max((r.width || 0.05) * ctx.tankW(), b0 * Math.sqrt(list.length) * 0.5),
       t = ctx.sim.time;
     for (const f of list) {
-      f._ps = L.near(f.x, f.y, f._ps);
-      if (f._pace == null) {
-        f._pace = ctx.rnd(0.9, 1.1);
-        f._zl = ctx.rnd();
+      R(f).ps = L.near(f.x, f.y, R(f).ps);
+      if (R(f).pace == null) {
+        R(f).pace = ctx.rnd(0.9, 1.1);
+        R(f).zl = ctx.rnd();
       }
     }
     if (size <= 1 || list.length < 6) {
       // one loose band
       for (const f of list) {
-        if (f._lane == null) f._lane = ctx.rnd(-1, 1) * Math.pow(ctx.rnd(), 0.6);
+        if (R(f).lane == null) R(f).lane = ctx.rnd(-1, 1) * Math.pow(ctx.rnd(), 0.6);
         const b = ctx.bl(f),
-          s2 = f._ps + dir * 0.004,
+          s2 = R(f).ps + dir * 0.004,
           p = L.at(s2),
           tg = L.tan(s2),
           w = width * (0.75 + 0.35 * Math.sin(s2 * TAU * 3 + 1.3));
-        const h = toward(f, tg[0] * dir, tg[1] * dir, p[0] - tg[1] * f._lane * w, p[1] + tg[0] * f._lane * w, b, 8);
-        head(f, h[0], h[1], spd * f._pace, dt);
-        setZ(ctx, f, lerp(z[0], z[1], f._zl), Math.min(1, dt * 0.8));
+        const h = toward(f, tg[0] * dir, tg[1] * dir, p[0] - tg[1] * R(f).lane * w, p[1] + tg[0] * R(f).lane * w, b, 8);
+        head(f, h[0], h[1], spd * R(f).pace, dt);
+        setZ(ctx, f, lerp(z[0], z[1], R(f).zl), Math.min(1, dt * 0.8));
       }
       return;
     }
@@ -222,34 +225,34 @@
       const d = a - c;
       return d - Math.round(d);
     }; // along-path difference, wrapped to -0.5..0.5
-    if (!st.made || list.some((f) => f._g == null || f._g >= nG)) {
+    if (!st.made || list.some((f) => R(f).g == null || R(f).g >= nG)) {
       if (!st.made) {
-        const srt = list.slice().sort((a, c) => a._ps - c._ps),
+        const srt = list.slice().sort((a, c) => R(a).ps - R(c).ps),
           per = Math.ceil(list.length / nG);
         srt.forEach((f, i) => {
-          f._g = Math.min(nG - 1, (i / per) | 0);
+          R(f).g = Math.min(nG - 1, (i / per) | 0);
         });
         st.made = true;
       }
       for (const f of list)
-        if (f._g == null || f._g >= nG) {
+        if (R(f).g == null || R(f).g >= nG) {
           let best = 0,
             bd = 9;
           G.forEach((g, gi) => {
             if (g.s != null) {
-              const d = Math.abs(ds(f._ps, g.s));
+              const d = Math.abs(ds(R(f).ps, g.s));
               if (d < bd) {
                 bd = d;
                 best = gi;
               }
             }
           });
-          f._g = best;
+          R(f).g = best;
         }
     }
     // each school's middle along the path (a circular mean) and its members in order, the slot each holds
     const mem = G.map(() => []);
-    for (const f of list) mem[f._g].push(f);
+    for (const f of list) mem[R(f).g].push(f);
     G.forEach((g, gi) => {
       const M = mem[gi];
       g.n = M.length;
@@ -257,8 +260,8 @@
       let cx = 0,
         cy = 0;
       for (const f of M) {
-        cx += Math.cos(f._ps * TAU);
-        cy += Math.sin(f._ps * TAU);
+        cx += Math.cos(R(f).ps * TAU);
+        cy += Math.sin(R(f).ps * TAU);
       }
       g.s = (((Math.atan2(cy, cx) / TAU) % 1) + 1) % 1;
     });
@@ -278,18 +281,18 @@
       const g = G[gi],
         M = mem[gi];
       if (!M.length) continue;
-      M.sort((a, c) => dir * ds(c._ps, a._ps)); // the one furthest along leads (slot 0)
+      M.sort((a, c) => dir * ds(R(c).ps, R(a).ps)); // the one furthest along leads (slot 0)
       const lane = (g.lane + 0.25 * Math.sin(t * 0.07 + g.ph)) * width; // the school's lane wanders slowly across the path
       M.forEach((f, k) => {
         const b = ctx.bl(f),
           sl = SLOTS[k % SLOTS.length],
           back = Math.floor(k / SLOTS.length) * 4.4;
-        if (f._jx == null) {
-          f._jx = ctx.rnd(-0.3, 0.3);
-          f._jy = ctx.rnd(-0.3, 0.3);
+        if (R(f).jx == null) {
+          R(f).jx = ctx.rnd(-0.3, 0.3);
+          R(f).jy = ctx.rnd(-0.3, 0.3);
         }
-        const along = (sl[0] - back + f._jx) * 1.7 * b,
-          across = (sl[1] + f._jy) * 0.95 * b;
+        const along = (sl[0] - back + R(f).jx) * 1.7 * b,
+          across = (sl[1] + R(f).jy) * 0.95 * b;
         const ss = g.s + (dir * along) / len,
           p = L.at(ss),
           tg = L.tan(ss),
@@ -308,7 +311,7 @@
           dt,
           1.6
         );
-        setZ(ctx, f, lerp(z[0], z[1], clamp(g.zl + (f._zl - 0.5) * 0.3, 0, 1)), Math.min(1, dt * 0.6));
+        setZ(ctx, f, lerp(z[0], z[1], clamp(g.zl + (R(f).zl - 0.5) * 0.3, 0, 1)), Math.min(1, dt * 0.6));
       });
     }
   }
@@ -347,19 +350,19 @@
       z = zOf(r),
       t = ctx.sim.time;
     for (const f of list) {
-      if (f._ph == null) {
-        f._ph = ctx.rnd(0, TAU);
-        f._bk = ctx.rnd(1.5, r.back || 4);
-        f._sd = ctx.rnd(-1, 1) * (r.side || 1.5);
-        f._zz = ctx.rnd(z[0], z[1]);
+      if (R(f).ph == null) {
+        R(f).ph = ctx.rnd(0, TAU);
+        R(f).bk = ctx.rnd(1.5, r.back || 4);
+        R(f).sd = ctx.rnd(-1, 1) * (r.side || 1.5);
+        R(f).zz = ctx.rnd(z[0], z[1]);
       }
-      const sd = f._sd + 0.25 * Math.sin(t * 0.7 + f._ph),
-        tx = ld.x - h[0] * f._bk * b - h[1] * sd * b,
-        ty = ld.y - h[1] * f._bk * b + h[0] * sd * b;
+      const sd = R(f).sd + 0.25 * Math.sin(t * 0.7 + R(f).ph),
+        tx = ld.x - h[0] * R(f).bk * b - h[1] * sd * b,
+        ty = ld.y - h[1] * R(f).bk * b + h[0] * sd * b;
       const ahead = (tx - f.x) * h[0] + (ty - f.y) * h[1],
         hh = toward(f, h[0], h[1], tx, ty, b, 3);
       head(f, hh[0], hh[1], clamp(0.55 + ahead / (b * 4), 0.35, 1.3), dt, 1.8);
-      setZ(ctx, f, f._zz, Math.min(1, dt * 0.5));
+      setZ(ctx, f, R(f).zz, Math.min(1, dt * 0.5));
     }
   }
   // round the middle, each at its own radius and depth
@@ -370,18 +373,18 @@
       inner = (r.inner || 0) * ctx.tankW(),
       t = ctx.sim.time;
     for (const f of list) {
-      if (f._ph == null) {
-        f._ph = ctx.rnd(0, TAU);
-        f._r = inner + Math.sqrt(ctx.rnd()) * (rad - inner);
-        f._zz = ctx.rnd(z[0], z[1]);
-        f._w = ctx.rnd() < 0.5 ? -1 : 1;
+      if (R(f).ph == null) {
+        R(f).ph = ctx.rnd(0, TAU);
+        R(f).r = inner + Math.sqrt(ctx.rnd()) * (rad - inner);
+        R(f).zz = ctx.rnd(z[0], z[1]);
+        R(f).w = ctx.rnd() < 0.5 ? -1 : 1;
       }
-      const hh = circle(f, c, Math.max(f._r, ctx.bl(f) * 3), r.squash || 1, f._w * (r.turn || 1) >= 0 ? 1 : -1);
+      const hh = circle(f, c, Math.max(R(f).r, ctx.bl(f) * 3), r.squash || 1, R(f).w * (r.turn || 1) >= 0 ? 1 : -1);
       head(f, hh[0], hh[1], r.speed || 0.3, dt, 1.2);
       setZ(
         ctx,
         f,
-        clamp(f._zz + (r.bob || 0) * Math.sin(t * (r.bobSpeed || 0.5) + f._ph * 3), 0, 1),
+        clamp(R(f).zz + (r.bob || 0) * Math.sin(t * (r.bobSpeed || 0.5) + R(f).ph * 3), 0, 1),
         Math.min(1, dt * 0.4)
       );
     }
@@ -392,17 +395,17 @@
       rad = (r.radius || 0.3) * ctx.tankW(),
       t = ctx.sim.time;
     for (const f of list) {
-      if (f._ph == null) {
-        f._ph = ctx.rnd(0, TAU);
-        f._r = Math.sqrt(ctx.rnd()) * rad;
-        f._w = ctx.rnd() < 0.5 ? -1 : 1;
+      if (R(f).ph == null) {
+        R(f).ph = ctx.rnd(0, TAU);
+        R(f).r = Math.sqrt(ctx.rnd()) * rad;
+        R(f).w = ctx.rnd() < 0.5 ? -1 : 1;
       }
-      if (Math.sin(t * 0.2 + f._ph * 5) > -0.3) {
-        const hh = circle(f, c, Math.max(f._r, ctx.bl(f) * 3), 1, f._w);
+      if (Math.sin(t * 0.2 + R(f).ph * 5) > -0.3) {
+        const hh = circle(f, c, Math.max(R(f).r, ctx.bl(f) * 3), 1, R(f).w);
         head(f, hh[0], hh[1], r.speed || 0.2, dt, 1);
       } else {
         f.steer = { x: 0, y: 0, keep: true };
-        f._hx = null;
+        R(f).hx = null;
       }
       setZ(ctx, f, zOf(r)[0] || 0.94, Math.min(1, dt * 0.5));
     }
@@ -487,17 +490,17 @@
     };
     const wet = (x, z, d) => Math.hypot(x - w.x, z - w.z) < w.r * 0.82 && dep(x, z) > d;
     for (const f of koi)
-      if (f.sch == null || f.sch >= nS) {
-        f.sch = rnd() < 0.07 ? -1 : (rnd() * nS) | 0;
-        f.slot = [rnd(1.4, 3.4), (rnd() < 0.5 ? -1 : 1) * rnd(0.4, 1.6)];
-        f.pace = rnd(0.85, 1.12);
-        f.lag = rnd(0, 1);
+      if (R(f).sch == null || R(f).sch >= nS) {
+        R(f).sch = rnd() < 0.07 ? -1 : (rnd() * nS) | 0;
+        R(f).slot = [rnd(1.4, 3.4), (rnd() < 0.5 ? -1 : 1) * rnd(0.4, 1.6)];
+        R(f).pace = rnd(0.85, 1.12);
+        R(f).lag = rnd(0, 1);
       }
     if ((B.mix -= dt) < 0) {
       B.mix = 25 + rnd(0, 35);
       for (let i = 0; (i < Math.max(1, koi.length / 12)) | 0; i++) {
         const f = koi[(rnd() * koi.length) | 0];
-        f.sch = (rnd() * nS) | 0;
+        R(f).sch = (rnd() * nS) | 0;
       }
     } // fission and fusion: a few change school
     // a place to go: ahead of it on a gentle turn, in the water, near its school's own part of the pond (which turns slowly)
@@ -532,22 +535,22 @@
       sch.push(sc);
       lead.push(null);
     }
-    for (const f of koi) if (f.sch >= 0 && !lead[f.sch]) lead[f.sch] = f;
+    for (const f of koi) if (R(f).sch >= 0 && !lead[R(f).sch]) lead[R(f).sch] = f;
     const lookahead = bl * 3.2,
       ahead = (x, z, hx, hz) => dep(x + hx * lookahead, z + hz * lookahead);
     for (const f of koi) {
       if (f.alarm > 0.25 || f.dashT > 0 || f.riseT > 0) {
         f.steer = null;
-        f._hx = null;
+        R(f).hx = null;
         continue;
       }
       const [x, z] = pos(f),
         h = heading(f);
       let tx,
         tz,
-        spd = 0.7 * f.pace;
-      const lf = f.sch >= 0 ? lead[f.sch] : f,
-        sc = f.sch >= 0 ? sch[f.sch] : f.solo || (f.solo = { wp: null, rest: 0 });
+        spd = 0.7 * R(f).pace;
+      const lf = R(f).sch >= 0 ? lead[R(f).sch] : f,
+        sc = R(f).sch >= 0 ? sch[R(f).sch] : R(f).solo || (R(f).solo = { wp: null, rest: 0 });
       if (lf === f) {
         // a leader (or a koi on its own): go to a place, ease in, rest, choose the next on a gentle turn
         if (sc.rest > 0) {
@@ -558,24 +561,24 @@
         } else {
           if (!sc.wp || Math.hypot(sc.wp[0] - x, sc.wp[1] - z) < bl * 2.2 || (sc.age = (sc.age || 0) + dt) > 22) {
             if (sc.wp && rnd() < 0.4) sc.rest = rnd(2.5, 6);
-            sc.wp = pick(x, z, h, w.r * (f.sch >= 0 ? 0.9 : 0.6), f.sch >= 0 ? f.sch : null);
+            sc.wp = pick(x, z, h, w.r * (R(f).sch >= 0 ? 0.9 : 0.6), R(f).sch >= 0 ? R(f).sch : null);
             sc.age = 0;
           }
           tx = sc.wp[0];
           tz = sc.wp[1];
           const d = Math.hypot(tx - x, tz - z);
-          spd = clamp(d / (bl * 5), 0.4, 0.78) * f.pace * (0.9 + 0.1 * Math.sin(B.t * 0.7 + f.lag * 6));
+          spd = clamp(d / (bl * 5), 0.4, 0.78) * R(f).pace * (0.9 + 0.1 * Math.sin(B.t * 0.7 + R(f).lag * 6));
         }
       } else {
         // a follower: its place behind and beside the leader, and the leader's speed (a little faster when behind it)
         const lh = heading(lf),
           [lx, lz] = pos(lf),
-          back = f.slot[0] * bl,
-          side = f.slot[1] * bl * (1 + 0.25 * Math.sin(B.t * 0.5 + f.lag * 6));
+          back = R(f).slot[0] * bl,
+          side = R(f).slot[1] * bl * (1 + 0.25 * Math.sin(B.t * 0.5 + R(f).lag * 6));
         tx = lx - lh[0] * back - lh[1] * side;
         tz = lz - lh[1] * back + lh[0] * side;
         const d = Math.hypot(tx - x, tz - z);
-        spd = clamp(0.5 + d / (bl * 3.5), 0.35, 1.05) * f.pace;
+        spd = clamp(0.5 + d / (bl * 3.5), 0.35, 1.05) * R(f).pace;
       }
       // food: a koi near some of it goes for the nearest piece, and slows to feed
       if (o.food && o.food.length) {
@@ -629,7 +632,7 @@
       else f.steer = { x: dx * spd * gain, y: dz * spd * gain, keep: true };
       // depth: each koi drifts to its own layer, slowly (a rise or a dive in progress is left alone)
       if (!(f.riseT > 0) && o.zr) {
-        const zt = 0.28 + 0.22 * Math.sin(B.t * 0.09 + f.lag * 20) + (f.sch === 0 ? 0.08 : 0),
+        const zt = 0.28 + 0.22 * Math.sin(B.t * 0.09 + R(f).lag * 20) + (R(f).sch === 0 ? 0.08 : 0),
           zz = clamp(zt, o.zr[0], o.zr[1]),
           k = Math.min(1, dt * 0.25);
         if (o.setZ) o.setZ(f, zz, k);
