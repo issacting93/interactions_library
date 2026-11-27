@@ -76,8 +76,9 @@ void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y
   vec2 v = (vUv - 0.5) * vec2(uAsp, 1.0) * 2.0; float vig = smoothstep(0.7, 1.8, length(v)) * uVig;
   // mist: banks of fog drifting across the picture, thicker low down (a place's setting.mist)
   float mist = 0.0; if (uMist > 0.0) { vec2 mq = vec2(vUv.x * uAsp * 2.2 + uT * 0.02, vUv.y * 2.4 - uT * 0.012); mist = smoothstep(0.35, 0.85, fbm(mq) * 0.75 + fbm(mq * 2.3 + 4.0) * 0.35) * uMist * (0.45 + 0.55 * (1.0 - vUv.y)); }
-  o = vec4(uShaftC * s * (1.0 - uFade) + uFadeC * uFade + uMistC * mist * 0.6, max(max(vig, uFade), mist * 0.6)); }`;   // drawn ONE, ONE_MINUS_SRC_ALPHA: shafts add, the vignette and the dip darken
+  o = vec4(uShaftC * s * (1.0 - uFade) + uFadeC * uFade + uMistC * mist * 0.6, max(max(vig, uFade), mist * 0.6)); }`; // drawn ONE, ONE_MINUS_SRC_ALPHA: shafts add, the vignette and the dip darken
   let P = null;
-  const progs = () => P || (P = { floor: program(QUAD_VS, FLOOR_FS), surf: program(SURF_VS, SURF_FS), over: program(QUAD_VS, OVER_FS) });
+  const progs = () =>
+    P || (P = { floor: program(QUAD_VS, FLOOR_FS), surf: program(SURF_VS, SURF_FS), over: program(QUAD_VS, OVER_FS) });
   window.ENVX_GL = { progs };
 })();
