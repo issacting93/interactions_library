@@ -5,16 +5,18 @@
 //   title, note
 //   setting  style (a style recipe id), city (the city and towers stand: true / false), center ('tower' or [x, y] as fractions of the tank),
 //            water { deep, shallow, light, shade, fog, ribbons, net, fogK, scale, moon }, surface { level (0..1 of the depth), colour, opacity, ribbons, moon },
-//            shafts { amount, colour }, vignette, snow, glow
+//            shafts { amount, colour }, vignette, snow, glow, iris (0 oil, 1 holo, 2 neon), life (true: the ecosystem runs: hunting, fleeing),
+//            growth { kind: moss | frost | rust | fungus, amount, colour, tip, timelapse (grows in over the loop), seasons (frost, moss, fungus, rust in turn) } on the stone and the ground,
+//            wet { amount, colour } (a sheen on the stone), mist { amount, colour } (fog banks)
 //   paths    named loops the cast swims along: { x, y (fractions of the tank: the middle), along, across (fractions of the tank's width), angle (deg),
 //            square (2 an ellipse, 4 a rounded box), through: [x, y] (the loop is slid so its near side passes through that point) }
-//   cast     rows: { species, n, role, layer, ... } -- roles: stream (along a path, in lanes), formation (a leader and its wing along a path),
+//   cast     rows: { species, n, role, layer, ... } -- roles: stream (along a path, in lanes), formation (a leader and its wing along a path), wild (no steering: the ecosystem has them),
 //            escort (behind and beside the first of another species), drift (turning slowly round the middle), bed (on the floor);
 //            layer: air, surface, mid, deep, bed, or z: [top, bottom] (fractions of the depth). stone: true turns it to stone in the place's own style.
 //   shots    { kind, len (s), target, yaw, zoom } -- kinds: above, ride, follow, beneath, descent, orbit, lookup, low;
 //            target: 'center', 'densest' (the busiest stretch of the first stream), or a species key
 //   look     creatures: 'specimen' (the saved looks, drawn as Specimen draws them) | 'styled' (this place's own) | 'flat' (World Scene's line drawing);
-//            styled { paint: Painted fields, stone: a look, looks: { species: look }, lineAlpha }, flat { fill, colours: { species: [hi, lo] } }
+//            styled { paint: Painted fields, stone: a look, looks: { species: look | { from: 'saved' } }, base: a look every other creature takes over its own colours (bright 0.3 = dark), all, lineAlpha }, flat { fill, colours: { species: [hi, lo] } }
 window.WorldPlaces = {
   world: { title: 'World', note: 'The city, its towers and the open water: the page as it was.' },
 
@@ -22,7 +24,7 @@ window.WorldPlaces = {
     title: 'Glass Crossing', note: 'Glass Mantas cross a river of koi, seen from above through the water.',
     setting: { style: 'glitch', city: false, center: [0.5, 0.5], snow: false, glow: 0.55, vignette: 0.55,
       water: { deep: '#0a3d66', shallow: '#21b48d', light: '#e8fff0', shade: '#05223a', fog: '#0f5d6e', ribbons: 1.1, net: 0.16, fogK: 0.00005, scale: 330 },
-      surface: { level: 0.3, colour: '#2fb3a0', opacity: 0.12, ribbons: 0.3 }, shafts: { amount: 0 } },
+      surface: { level: 0.3, colour: '#2fb3a0', opacity: 0.12, ribbons: 0.3 }, shafts: { amount: 0 }, iris: 1 },   // Holo finish: the school flashes as it turns
     paths: {
       river: { through: [0.5, 0.5], along: 0.6, across: 0.2, angle: -60, square: 4 },
       sky: { through: [0.5, 0.5], along: 0.64, across: 0.32, angle: 14.5, square: 3 },
@@ -35,8 +37,7 @@ window.WorldPlaces = {
       { species: 'manta', n: 3, role: 'formation', path: 'sky', z: [0.07, 0.07], speed: 0.42 },
       { species: 'swift', n: 14, role: 'escort', lead: 'manta', z: [0.03, 0.12], back: 7, side: 2.5 },
       { species: 'ringed-lance-monarch', n: 2, role: 'drift', z: [0.01, 0.04], radius: 0.32, speed: 0.25 },
-      { species: 'glass-star', n: 6, role: 'drift', layer: 'mid', radius: 0.3, speed: 0.14 },
-      { species: 'plated-scavenger', n: 4, role: 'bed', radius: 0.3 },
+      { species: 'glass-star', n: 10, role: 'drift', layer: 'mid', radius: 0.3, speed: 0.14 },
     ],
     flora: { kind: 'river', amount: 0.8 },
     shots: [
@@ -44,9 +45,10 @@ window.WorldPlaces = {
       { kind: 'ride', len: 11, target: 'manta' },
       { kind: 'beneath', len: 10, target: 'densest' },
     ],
-    look: { creatures: 'specimen',
-      styled: { paint: { paint: 1, paintSteps: 4, paintBrush: 1.1, paintWobble: 0.35, paintTemp: 0.32, paintDetail: 0.7, paintOutline: 0.75 }, lineAlpha: 0.14,
-        looks: { koi: { material: 'ember', pattern: 'koi', colors: ['#ff8a1e', '#3a1406', '#ffc45a', '#ffe2a8', '#ff5a1a'], emissive: 0.35 } } },
+    // glass bodies you see the river through (the mantas, swifts, stars and monarchs); the koi and Showa stay themselves, warm against the cold water
+    look: { creatures: 'styled',
+      styled: { base: { material: 'glass', pattern: 'veins', opacity: 0.85, fresnel: 0.6, emissive: 0.2, vein: 0.5 }, lineAlpha: 0.16, backing: 1,
+        looks: { koi: { material: 'ember', pattern: 'koi', colors: ['#ff8a1e', '#3a1406', '#ffc45a', '#ffe2a8', '#ff5a1a'], emissive: 0.35 }, 'koi-longfin-showa': { from: 'saved' } } },
       flat: { fill: 0.9, colours: { koi: ['#ffc061', '#ff6a12'], 'koi-longfin-showa': ['#fff7ea', '#e2382a'], manta: ['#ffffff', '#cfe8ff'], swift: ['#ffffff', '#9fc3d6'] } } },
   },
 
@@ -54,7 +56,8 @@ window.WorldPlaces = {
     title: 'Drowned Spires', note: 'The city under the sea: light shafts, jellies between the towers, koi circling the tallest.',
     setting: { style: 'route-blue', city: true, center: 'tower', snow: true, glow: 0.8, vignette: 0.7,
       water: { deep: '#06142e', shallow: '#13406a', light: '#7fd8ff', shade: '#020814', fog: '#071a36', ribbons: 0.45, net: 0.22, fogK: 0.00028, scale: 420 },
-      surface: { level: 0.02, colour: '#3d7fb8', opacity: 0.18, ribbons: 0.5 }, shafts: { amount: 0.55, colour: '#9fdcff' } },
+      surface: { level: 0.02, colour: '#3d7fb8', opacity: 0.18, ribbons: 0.5 }, shafts: { amount: 0.55, colour: '#9fdcff' },
+      wet: { amount: 0.8, colour: '#9fdcff' }, mist: { amount: 0.3, colour: '#0c2a4a' } },   // wet stone catching the shafts; a blue haze between the towers
     paths: {
       ring: { x: 'center', y: 'center', along: 0.16, across: 0.16, angle: 0, square: 2 },
       wide: { x: 'center', y: 'center', along: 0.42, across: 0.53, angle: 23, square: 2 },
@@ -62,7 +65,7 @@ window.WorldPlaces = {
     // the deep city: koi round the tallest tower, jellies rising between the towers, plankton wisps in the shafts, two mantas over the
     // roofs, anglers with their lanterns low among the kelp, lance swifts and eels in the dark near the bed, rosary eels turned to stone
     cast: [
-      { species: 'koi', n: 40, role: 'stream', path: 'ring', z: [0.35, 0.7], speed: 0.5, width: 0.06 },
+      { species: 'koi', n: 14, role: 'stream', path: 'ring', z: [0.35, 0.7], speed: 0.5, width: 0.06 },
       { species: 'jelly', n: 12, role: 'drift', z: [0.45, 0.45], radius: 0.35, speed: 0.2, bob: 0.35, bobSpeed: 0.12 },
       { species: 'angler-tailed-jelly-af60', n: 5, role: 'drift', z: [0.45, 0.45], radius: 0.35, speed: 0.2, bob: 0.35, bobSpeed: 0.12 },
       { species: 'manta', n: 2, role: 'formation', path: 'wide', z: [0.2, 0.2], speed: 0.38 },
@@ -79,9 +82,15 @@ window.WorldPlaces = {
       { kind: 'orbit', len: 12, target: 'center' },
       { kind: 'lookup', len: 10, target: 'center' },
     ],
-    look: { creatures: 'specimen',
-      styled: { paint: { paint: 0.85, paintSteps: 3, paintBrush: 1.3, paintWobble: 0.25, paintTemp: 0.18, paintDetail: 0.5, paintOutline: 0 }, lineAlpha: 0.22,
-        stone: { material: 'golem', pattern: 'veins', colors: ['#5f6a6c', '#141a1c', '#5fd8ff', '#c9d6d4', '#6f7a66'], grow: 'moss', growAmount: 0.55, growClump: 0.6, lumps: 0.6, roughness: 0.7, grain: 1, vein: 0.5, emissive: 0.15 } } },
+    // the deep is dark: bodies near black, and only what carries a light is lit (jellies, plankton, the anglers' lanterns); the stone eels are drowned iron
+    look: { creatures: 'styled',
+      styled: { base: { material: 'skin', pattern: 'veins', bright: 0.4, fresnel: 0.5 }, paint: { paint: 0.5, paintSteps: 3, paintBrush: 1.3, paintWobble: 0.25, paintTemp: 0.18, paintDetail: 0.5, paintOutline: 0 }, lineAlpha: 0.2, backing: 1,
+        looks: { jelly: { preset: 'energy', colors: ['#0a3a6a', '#02101e', '#4fd0ff', '#c8f0ff', '#7affd8'], vein: 0.5, roughness: 0.5 },
+          'angler-tailed-jelly-af60': { preset: 'energy', colors: ['#0a3a6a', '#02101e', '#4fd0ff', '#c8f0ff', '#7affd8'], vein: 0.5, roughness: 0.5 },
+          wisp: { preset: 'energy', colors: ['#103a5a', '#02101e', '#7fe8ff', '#e8fbff', '#4fd0ff'], vein: 0.5, fresnel: 0.8 },
+          angler: { material: 'ember', pattern: 'veins', colors: ['#0e1418', '#020406', '#ffb04a', '#ffe0a0', '#ff7a20'], emissive: 0.55 },
+          'puffer-plated-angler-25d9': { material: 'ember', pattern: 'veins', colors: ['#0e1418', '#020406', '#ffb04a', '#ffe0a0', '#ff7a20'], emissive: 0.45 } },
+        stone: { material: 'golem', pattern: 'veins', colors: ['#4a4038', '#120e0a', '#5fd8ff', '#a8b0b0', '#5a4a3a'], grow: 'rust', growAmount: 0.6, growClump: 0.5, lumps: 0.6, roughness: 0.7, vein: 0.5, emissive: 0.1 } } },
   },
 
   vigil: {
@@ -108,12 +117,15 @@ window.WorldPlaces = {
       { kind: 'low', len: 11, target: 'center' },
       { kind: 'follow', len: 10, target: 'ophan-halo-monarch' },
     ],
-    // every creature in the Energy material: a clear shell with a hot rim, ribbons arcing round it, light streaming to the tail (additive)
+    // a hierarchy of light: bodies dark and painted; Energy only on what carries light (wisps amber, moths pale, the monarchs violet and gold);
+    // the seraph, high above, the one solid pale-gold body
     look: { creatures: 'styled',
-      styled: { all: { preset: 'energy' },   // EcologyRender.PRESETS.energy, as Specimen's Energy button starts it
+      styled: { base: { material: 'skin', pattern: 'veins', bright: 0.3, fresnel: 0.4 }, paint: { paint: 0.6, paintSteps: 3, paintBrush: 1.1, paintWobble: 0.3, paintTemp: 0.2, paintDetail: 0.5, paintOutline: 0 }, lineAlpha: 0.1, backing: 1,
         looks: { wisp: { preset: 'energy', colors: ['#6a3a10', '#100804', '#ffb347', '#ffe2b0', '#ff7a3c'], vein: 0.5, fresnel: 0.8, grain: 1.2, roughness: 0.5 },
-          moth: { preset: 'energy', colors: ['#3a2a8a', '#080428', '#8fb8ff', '#d8e0ff', '#ffc0e0'], vein: 0.7, roughness: 0.4 } },
-        paint: { paint: 0 }, lineAlpha: 0.06 },
+          moth: { preset: 'energy', colors: ['#3a2a8a', '#080428', '#8fb8ff', '#d8e0ff', '#ffc0e0'], vein: 0.7, roughness: 0.4 },
+          'black-monarch': { preset: 'energy', colors: ['#2a1a6a', '#080428', '#9f7fff', '#e0d8ff', '#ff7ad0'], vein: 0.6, roughness: 0.4 },
+          'ophan-halo-monarch': { preset: 'energy', colors: ['#6a5a1a', '#100c04', '#ffd86a', '#fff6d8', '#c9a2ff'], vein: 0.6, roughness: 0.4 },
+          'halo-eyed-seraph': { material: 'skin', pattern: 'veins', colors: ['#e8d9a8', '#4a3a1a', '#fff2c0', '#fff2c0', '#c9a24a'], emissive: 0.25 } } },
       flat: { fill: 0.85, colours: { wisp: ['#fff1b8', '#ff9a3c'], moth: ['#fff3d6', '#d8a060'], 'black-monarch': ['#e9e4ff', '#6c5a9c'], 'ophan-halo-monarch': ['#fff6d8', '#c9a2ff'], 'koi-longfin-showa': ['#d9d2c8', '#a8342a'] } } },
   },
   garden: {
@@ -132,7 +144,6 @@ window.WorldPlaces = {
       { species: 'koi-longfin-showa', n: 20, role: 'school', layer: 'deep', radius: 0.38 },
       { species: 'frond-serpent', n: 3, role: 'drift', z: [0.72, 0.82], radius: 0.36, inner: 0.2, speed: 0.15 },
       { species: 'plated-scavenger', n: 4, role: 'bed', radius: 0.32 },
-      { species: 'pincer', n: 2, role: 'bed', radius: 0.25 },
       { species: 'worm', n: 4, role: 'drift', layer: 'air', radius: 0.32, speed: 0.35 },
       { species: 'black-monarch', n: 4, role: 'drift', layer: 'high', radius: 0.3, speed: 0.3 },
     ],
@@ -142,16 +153,18 @@ window.WorldPlaces = {
       { kind: 'beneath', len: 10, target: 'densest' },
       { kind: 'follow', len: 10, target: 'black-monarch' },
     ],
-    look: { creatures: 'specimen',
-      styled: { paint: { paint: 1, paintSteps: 4, paintBrush: 1, paintWobble: 0.4, paintTemp: 0.5, paintDetail: 0.6, paintOutline: 0.6 }, lineAlpha: 0.15 } },
+    // a painted pond: every body in the Painted material (flat colour, a brush, an outline); the koi keep their saved looks under the paint
+    look: { creatures: 'styled',
+      styled: { base: { material: 'skin', pattern: 'veins' }, paint: { paint: 1, paintSteps: 4, paintBrush: 1, paintWobble: 0.4, paintTemp: 0.5, paintDetail: 0.6, paintOutline: 0.6 }, lineAlpha: 0.12,
+        looks: { koi: { from: 'saved' }, 'koi-longfin-showa': { from: 'saved' } } } },
   },
 
   overgrowth: {
     title: 'Overgrown Tower', note: 'The old tower gone green: mossed stone creatures round it, pollen in the light, koi circling its foot.',
     setting: { style: 'relief', city: true, center: 'tower', snow: true, glow: 0.6, vignette: 0.7, dz: 0.9,
       water: { deep: '#16261d', shallow: '#3d5a40', light: '#e8f0c0', shade: '#0a120c', fog: '#1e3024', ribbons: 0.35, net: 0.25, fogK: 0.00022, scale: 450 },
-      surface: { level: 0.02, colour: '#9fbf7a', opacity: 0.1, ribbons: 0.4 }, shafts: { amount: 0.45, colour: '#f0e6a8' },
-      moss: { amount: 1, colour: '#3f6a2c', tip: '#8fae4a', timelapse: true } },   // moss on the ground and the stone, growing in over the loop as the plants do
+      surface: { level: 0.02, colour: '#9fbf7a', opacity: 0.1, ribbons: 0.4 }, shafts: { amount: 0.45, colour: '#f0e6a8' }, mist: { amount: 0.18, colour: '#d8e8a8' },
+      growth: { kind: 'moss', amount: 1, timelapse: true }, mist: { amount: 0.16, colour: '#d8e8a8' } },   // moss on the ground and the stone, growing in over the loop as the plants do
     paths: {
       ring: { x: 'center', y: 'center', along: 0.14, across: 0.14, angle: 0, square: 2 },
       wide: { x: 'center', y: 'center', along: 0.4, across: 0.5, angle: 30, square: 2 },
@@ -182,7 +195,8 @@ window.WorldPlaces = {
     title: 'Snow Fortress', note: 'The city under snow: frosted stone guardians, mantas and swifts over the walls, koi turning in the cold below.',
     setting: { style: 'paper', city: true, center: 'tower', snow: true, glow: 0.3, vignette: 0.4, dz: 0.9,
       water: { deep: '#b8c6d4', shallow: '#e8eef4', light: '#ffffff', shade: '#8a9aac', fog: '#d8e0e8', ribbons: 0.3, net: 0.1, fogK: 0.00018, scale: 500 },
-      surface: { level: 0.02, colour: '#f4f8fb', opacity: 0 }, shafts: { amount: 0.3, colour: '#ffffff' } },
+      surface: { level: 0.02, colour: '#f4f8fb', opacity: 0 }, shafts: { amount: 0.3, colour: '#ffffff' },
+      growth: { kind: 'frost', amount: 1 }, mist: { amount: 0.22, colour: '#e8f0f8' } },   // frost capping the walls and the ground, a pale mist
     paths: {
       ring: { x: 'center', y: 'center', along: 0.16, across: 0.16, angle: 0, square: 2 },
       wide: { x: 'center', y: 'center', along: 0.42, across: 0.5, angle: -20, square: 2 },
@@ -207,5 +221,212 @@ window.WorldPlaces = {
     look: { creatures: 'styled',
       styled: { paint: { paint: 0.8, paintSteps: 3, paintBrush: 1, paintWobble: 0.3, paintTemp: 0.2, paintDetail: 0.5, paintOutline: 0.7 }, lineAlpha: 0.12,
         stone: { material: 'golem', pattern: 'veins', colors: ['#9aa4ac', '#2a3036', '#8fd8ff', '#eef4f8', '#b0b8c0'], grow: 'frost', growAmount: 0.7, growClump: 0.5, lumps: 0.5, roughness: 0.6, vein: 0.5, emissive: 0.1 } } },
+  },
+
+  cathedral: {
+    title: 'Flooded Cathedral', note: 'A drowned nave under a rose window: gold light down the water, halo monarchs and a seraph rising through it.',
+    setting: { style: 'relief', city: true, center: 'tower', snow: false, glow: 0.9, vignette: 0.75, dz: 0.9, iris: 1,
+      water: { deep: '#150f2a', shallow: '#4a3a6a', light: '#ffd98a', shade: '#080614', fog: '#1c1434', ribbons: 0.5, net: 0.2, fogK: 0.0003, scale: 440 },
+      surface: { level: 0.02, colour: '#8a6fb8', opacity: 0.14, ribbons: 0.4 }, shafts: { amount: 1, colour: '#ffd98a' },
+      wet: { amount: 1, colour: '#ffe6b0' }, mist: { amount: 0.22, colour: '#2a1a4a' } },
+    paths: {
+      ring: { x: 'center', y: 'center', along: 0.16, across: 0.16, angle: 0, square: 2 },
+      wide: { x: 'center', y: 'center', along: 0.4, across: 0.5, angle: 25, square: 2 },
+    },
+    // the nave: halo monarchs in procession round the tower, crowned lancers against them, the seraph high in the light, votive wisps, Showa below
+    cast: [
+      { species: 'ophan-halo-monarch', n: 7, role: 'stream', path: 'ring', z: [0.15, 0.4], speed: 0.3, width: 0.05 },
+      { species: 'crowned-sickle-lancer', n: 4, role: 'stream', path: 'wide', reverse: true, z: [0.4, 0.55], speed: 0.3, width: 0.05 },
+      { species: 'halo-eyed-seraph', n: 1, role: 'drift', z: [0.03, 0.08], radius: 0.16, speed: 0.15 },
+      { species: 'ringed-lance-monarch', n: 3, role: 'drift', layer: 'air', radius: 0.35, speed: 0.22 },
+      { species: 'wisp', n: 22, role: 'drift', z: [0.2, 0.7], radius: 0.4, speed: 0.15, bob: 0.04 },
+      { species: 'koi-longfin-showa', n: 10, role: 'stream', path: 'ring', z: [0.7, 0.86], speed: 0.35, width: 0.06 },
+    ],
+    flora: { kind: 'kelp', amount: 0.3 },
+    shots: [
+      { kind: 'lookup', len: 12, target: 'center' },
+      { kind: 'descent', len: 11, target: 'center' },
+      { kind: 'orbit', len: 11, target: 'center' },
+    ],
+    look: { creatures: 'styled',
+      styled: { base: { material: 'glass', pattern: 'veins', opacity: 0.85, fresnel: 0.7, emissive: 0.3, vein: 0.5 }, paint: { paint: 0.3, paintSteps: 4, paintBrush: 0.8, paintWobble: 0.2, paintTemp: 0.5, paintDetail: 0.6, paintOutline: 0 }, lineAlpha: 0.2, backing: 1,
+        looks: { wisp: { preset: 'energy', colors: ['#6a4a10', '#100804', '#ffd070', '#fff2d0', '#ffa040'], vein: 0.5, fresnel: 0.8, roughness: 0.5 }, 'koi-longfin-showa': { from: 'saved' },
+          'halo-eyed-seraph': { material: 'glass', pattern: 'veins', colors: ['#fff0c8', '#6a5020', '#fff6d8', '#ffffff', '#ffd070'], opacity: 0.9, emissive: 0.5, fresnel: 0.8 } } } },
+  },
+
+  foundry: {
+    title: 'Rust Foundry', note: 'A drowned machine yard: rusted stone guardians, crawlers working the bed, sparks rising through the orange murk.',
+    setting: { style: 'relief', city: true, center: 'tower', snow: false, glow: 0.9, vignette: 0.75, dz: 0.9,
+      water: { deep: '#24100a', shallow: '#5a3018', light: '#ff9a4a', shade: '#0c0502', fog: '#2a160c', ribbons: 0.3, net: 0.3, fogK: 0.00032, scale: 380 },
+      surface: { level: 0.02, colour: '#a8643a', opacity: 0.12, ribbons: 0.3 }, shafts: { amount: 0.4, colour: '#ffb070' },
+      growth: { kind: 'rust', amount: 1 }, wet: { amount: 0.6, colour: '#ffb070' }, mist: { amount: 0.3, colour: '#4a2410' } },
+    paths: {
+      ring: { x: 'center', y: 'center', along: 0.15, across: 0.15, angle: 0, square: 2 },
+      wide: { x: 'center', y: 'center', along: 0.42, across: 0.5, angle: -15, square: 2 },
+    },
+    // the yard: crawlers and strider machines on the bed, stone hunters pacing the keep, lances idling in the murk, sparks of Energy rising
+    cast: [
+      { species: 'plated-scavenger', n: 8, role: 'bed', radius: 0.34 },
+      { species: 'carapace-strider', n: 5, role: 'bed', radius: 0.3 },
+      { species: 'pincer', n: 6, role: 'bed', radius: 0.28 },
+      { species: 'hunter', n: 3, role: 'stream', path: 'ring', z: [0.55, 0.7], speed: 0.3, width: 0.04, stone: true },
+      { species: 'strike-lance', n: 4, role: 'drift', z: [0.3, 0.6], radius: 0.38, inner: 0.12, speed: 0.2 },
+      { species: 'eel', n: 3, role: 'stream', path: 'wide', z: [0.6, 0.78], speed: 0.35, width: 0.07 },
+      { species: 'wisp', n: 24, role: 'drift', z: [0.05, 0.7], radius: 0.4, speed: 0.3, bob: 0.06 },
+    ],
+    shots: [
+      { kind: 'low', len: 11, target: 'center' },
+      { kind: 'orbit', len: 11, target: 'center' },
+      { kind: 'follow', len: 10, target: 'hunter' },
+    ],
+    look: { creatures: 'styled',
+      styled: { base: { material: 'golem', pattern: 'veins', colors: ['#6e5a4c', '#1f1510', '#ff8a3d', '#d8c0a8', '#8a6a50'], grow: 'rust', growAmount: 0.7, growClump: 0.5, lumps: 0.5, roughness: 0.7, vein: 0.4, emissive: 0.1 }, lineAlpha: 0.14, backing: 1,
+        looks: { wisp: { preset: 'energy', colors: ['#6a2a08', '#100402', '#ff8a3c', '#ffd8a0', '#ff5a1a'], vein: 0.5, fresnel: 0.8, roughness: 0.6 },
+          eel: { material: 'ember', pattern: 'veins', colors: ['#3a1a0a', '#0c0502', '#ff8a3d', '#ffc890', '#ff5a1a'], emissive: 0.4 } },
+        stone: { material: 'golem', pattern: 'veins', colors: ['#6e5a4c', '#1f1510', '#ff8a3d', '#d8c0a8', '#8a6a50'], grow: 'rust', growAmount: 0.85, growClump: 0.5, lumps: 0.6, roughness: 0.7, vein: 0.4, emissive: 0.1 } } },
+  },
+
+  hollow: {
+    title: 'Spore Hollow', note: 'A cave grown over with fungus: comb drifters and jellies in the dark, green spores hanging in a slow mist.',
+    setting: { style: 'route-blue', city: true, center: 'tower', snow: false, glow: 1.1, vignette: 0.8, dz: 0.9,
+      water: { deep: '#030d0c', shallow: '#0e3a30', light: '#9aff8a', shade: '#010403', fog: '#04140f', ribbons: 0.18, net: 0.3, fogK: 0.0004, scale: 360 },
+      surface: { level: 0.02, colour: '#1a4a3a', opacity: 0.1, ribbons: 0.2 }, shafts: { amount: 0.25, colour: '#7aff9a' },
+      growth: { kind: 'fungus', amount: 1, timelapse: true }, wet: { amount: 0.5, colour: '#9affc0' }, mist: { amount: 0.55, colour: '#1d3a30' } },
+    paths: { ring: { x: 'center', y: 'center', along: 0.16, across: 0.16, angle: 0, square: 2 } },
+    // the hollow: comb drifters turned half to fungus-stone, jellies pulsing teal, leeches hanging on, spores (wisps) filling the air, moths to the light
+    cast: [
+      { species: 'comb-drifter', n: 10, role: 'drift', z: [0.2, 0.6], radius: 0.4, speed: 0.1, bob: 0.03, stone: true },
+      { species: 'jelly', n: 10, role: 'drift', z: [0.3, 0.55], radius: 0.38, speed: 0.15, bob: 0.3, bobSpeed: 0.12 },
+      { species: 'leech', n: 6, role: 'drift', z: [0.4, 0.8], radius: 0.3, speed: 0.15 },
+      { species: 'worm', n: 5, role: 'drift', z: [0.6, 0.85], radius: 0.3, speed: 0.2 },
+      { species: 'moth', n: 6, role: 'drift', layer: 'air', radius: 0.3, speed: 0.3 },
+      { species: 'wisp', n: 40, role: 'drift', z: [0.05, 0.8], radius: 0.42, speed: 0.12, bob: 0.06 },
+    ],
+    flora: { kind: 'night', amount: 0.7, colours: { lily: ['#2a5a4a', '#b8ff8a'], weed: ['#1f4a3a', '#7aff9a'], reed: ['#2a4a3a', '#9aff8a'], turf: ['#1a3a2a', '#5a9a5a'] } },
+    shots: [
+      { kind: 'descent', len: 12, target: 'center' },
+      { kind: 'orbit', len: 11, target: 'center' },
+      { kind: 'low', len: 10, target: 'center' },
+    ],
+    look: { creatures: 'styled',
+      styled: { base: { material: 'skin', pattern: 'veins', bright: 0.4, fresnel: 0.5 }, lineAlpha: 0.12, backing: 1,
+        looks: { wisp: { preset: 'energy', colors: ['#1a5a10', '#040c02', '#9aff6a', '#e8ffd0', '#4aff9a'], vein: 0.5, fresnel: 0.8, roughness: 0.5 },
+          jelly: { preset: 'energy', colors: ['#0a4a4a', '#020c0c', '#4affd0', '#d0fff0', '#7aff9a'], vein: 0.5, roughness: 0.5 },
+          moth: { preset: 'energy', colors: ['#2a4a1a', '#060c02', '#d0ff8a', '#f4ffe0', '#ffe08a'], vein: 0.6, roughness: 0.4 } },
+        stone: { material: 'golem', pattern: 'veins', colors: ['#6a6048', '#14120a', '#e8c88a', '#d8d4b8', '#8a7d62'], grow: 'fungus', growAmount: 0.8, growClump: 0.6, lumps: 0.6, roughness: 0.7, vein: 0.5, emissive: 0.15 } } },
+  },
+
+  trench: {
+    title: 'The Trench', note: 'Near-total dark: only lures and lanterns show; something large turns slowly just out of the light.',
+    setting: { style: 'glitch', city: false, center: [0.5, 0.5], snow: false, glow: 1.6, vignette: 0.85, dz: 0.9,
+      water: { deep: '#01060e', shallow: '#04182a', light: '#6aaad8', shade: '#000000', fog: '#01070c', ribbons: 0.1, net: 0.08, fogK: 0.0003, scale: 420, moon: 0 },
+      surface: { level: 0.02, colour: '#02080e', opacity: 0.05, ribbons: 0 }, shafts: { amount: 0.1, colour: '#3a7ab0' }, mist: { amount: 0.55, colour: '#03101c' } },
+    paths: {
+      deep: { x: 'center', y: 'center', along: 0.46, across: 0.32, angle: 20, square: 2 },
+    },
+    // lures hanging in the black, a school of lance swifts passing through with their small lights, a drape-vampire at the edge of seeing
+    cast: [
+      { species: 'angler', n: 6, role: 'drift', z: [0.5, 0.88], radius: 0.36, inner: 0.1, speed: 0.1 },
+      { species: 'puffer-plated-angler-25d9', n: 3, role: 'drift', z: [0.55, 0.85], radius: 0.36, inner: 0.1, speed: 0.1 },
+      { species: 'angler-tailed-jelly-af60', n: 8, role: 'drift', z: [0.3, 0.75], radius: 0.4, speed: 0.12, bob: 0.3, bobSpeed: 0.1 },
+      { species: 'abyssal-lance-swift', n: 9, role: 'stream', path: 'deep', z: [0.6, 0.8], speed: 0.45, width: 0.05 },
+      { species: 'drape-vampire', n: 2, role: 'drift', z: [0.4, 0.7], radius: 0.45, inner: 0.2, speed: 0.08 },
+      { species: 'siphon', n: 3, role: 'drift', z: [0.6, 0.9], radius: 0.4, speed: 0.08 },
+      { species: 'wisp', n: 24, role: 'drift', z: [0.1, 0.9], radius: 0.45, speed: 0.1, bob: 0.05 },
+    ],
+    shots: [
+      { kind: 'orbit', len: 13, target: 'center', zoom: 1.5 },
+      { kind: 'follow', len: 11, target: 'angler' },
+      { kind: 'descent', len: 12, target: 'center', zoom: 1.4 },
+    ],
+    look: { creatures: 'styled',
+      styled: { base: { material: 'skin', pattern: 'veins', bright: 0.3, fresnel: 0.45 }, lineAlpha: 0.12, backing: 1,
+        looks: { angler: { material: 'ember', pattern: 'veins', colors: ['#0a0e12', '#020406', '#ffb04a', '#ffe0a0', '#ff7a20'], emissive: 0.6 },
+          'puffer-plated-angler-25d9': { material: 'ember', pattern: 'veins', colors: ['#0a0e12', '#020406', '#ffb04a', '#ffe0a0', '#ff7a20'], emissive: 0.5 },
+          'angler-tailed-jelly-af60': { preset: 'energy', colors: ['#0a3a6a', '#02101e', '#4fd0ff', '#c8f0ff', '#7affd8'], vein: 0.5, roughness: 0.5 },
+          'abyssal-lance-swift': { preset: 'energy', colors: ['#3a0a6a', '#0c0218', '#b04fff', '#f0c8ff', '#ff7ad8'], vein: 0.5, roughness: 0.5 },
+          wisp: { preset: 'energy', colors: ['#103a5a', '#02101e', '#7fe8ff', '#e8fbff', '#4fd0ff'], vein: 0.4, fresnel: 0.8 } } } },
+  },
+
+  seasons: {
+    title: 'Four Seasons Tower', note: 'One tower through a year: frost, moss, fungus, rust, in turn; the koi circle through all of it.',
+    setting: { style: 'relief', city: true, center: 'tower', snow: true, glow: 0.5, vignette: 0.6, dz: 0.9,
+      water: { deep: '#1c2a2c', shallow: '#4a6462', light: '#e8f0e0', shade: '#0a1214', fog: '#243436', ribbons: 0.3, net: 0.18, fogK: 0.0002, scale: 460 },
+      surface: { level: 0.02, colour: '#9fb8a8', opacity: 0.1, ribbons: 0.35 }, shafts: { amount: 0.4, colour: '#f0ecd0' },
+      growth: { seasons: true, amount: 1 }, mist: { amount: 0.15, colour: '#d8e0d8' } },
+    paths: {
+      ring: { x: 'center', y: 'center', along: 0.15, across: 0.15, angle: 0, square: 2 },
+      wide: { x: 'center', y: 'center', along: 0.42, across: 0.5, angle: 20, square: 2 },
+    },
+    // a long loop: the tower takes frost, then moss, then fungus, then rust (a quarter each); koi round its foot, mantas over, a stone dragon on guard
+    cast: [
+      { species: 'koi', n: 20, role: 'stream', path: 'ring', z: [0.6, 0.82], speed: 0.4, width: 0.05 },
+      { species: 'manta', n: 2, role: 'formation', path: 'wide', z: [0.12, 0.12], speed: 0.36 },
+      { species: 'swift', n: 8, role: 'escort', lead: 'manta', z: [0.05, 0.15], back: 6, side: 2.5 },
+      { species: 'comb-drifter', n: 4, role: 'drift', z: [0.2, 0.5], radius: 0.4, speed: 0.1, bob: 0.03 },
+      { species: 'dragon', n: 1, role: 'stream', path: 'ring', reverse: true, z: [0.35, 0.45], speed: 0.28, width: 0.02, stone: true },
+    ],
+    flora: { kind: 'overgrowth', amount: 0.5 },
+    shots: [
+      { kind: 'orbit', len: 15, target: 'center' },
+      { kind: 'descent', len: 14, target: 'center' },
+      { kind: 'lookup', len: 14, target: 'center' },
+    ],
+    look: { creatures: 'styled',
+      styled: { paint: { paint: 0.7, paintSteps: 3, paintBrush: 1.1, paintWobble: 0.3, paintTemp: 0.3, paintDetail: 0.5, paintOutline: 0 }, lineAlpha: 0.14,
+        looks: { koi: { from: 'saved' }, manta: { from: 'saved' }, swift: { from: 'saved' }, 'comb-drifter': { from: 'saved' } },
+        stone: { material: 'golem', pattern: 'veins', colors: ['#6a6e64', '#16180f', '#c8e07a', '#d6dcc4', '#7a7a5a'], grow: 'moss', growAmount: 0.6, growClump: 0.6, lumps: 0.6, roughness: 0.7, vein: 0.5, emissive: 0.1 } } },
+  },
+
+  hunt: {
+    title: 'The Hunt', note: 'The ecosystem, left to run: a dragon and two hunters work a school of koi; the eaten come back from the edge.',
+    setting: { style: 'glitch', city: false, center: [0.5, 0.5], snow: false, glow: 0.7, vignette: 0.6, life: true,
+      water: { deep: '#06222e', shallow: '#1a6a70', light: '#c8fff0', shade: '#020c12', fog: '#0a3640', ribbons: 0.7, net: 0.2, fogK: 0.00008, scale: 340 },
+      surface: { level: 0.25, colour: '#2fb3a0', opacity: 0.1, ribbons: 0.3 }, shafts: { amount: 0.2, colour: '#bfffe8' } },
+    paths: {},
+    // no steering: the sim's own hunting, fleeing and schooling run them (Life: Ecosystem). Watch one hunter, or the school's edge.
+    cast: [
+      { species: 'koi', n: 60, role: 'wild' },
+      { species: 'koi-longfin-showa', n: 12, role: 'wild' },
+      { species: 'worm', n: 8, role: 'wild' },
+      { species: 'eel', n: 2, role: 'wild' },
+      { species: 'hunter', n: 2, role: 'wild' },
+      { species: 'dragon', n: 1, role: 'wild' },
+    ],
+    shots: [
+      { kind: 'above', len: 12, target: 'center', zoom: 0.55 },
+      { kind: 'follow', len: 11, target: 'hunter' },
+      { kind: 'follow', len: 11, target: 'dragon' },
+    ],
+    look: { creatures: 'specimen' },
+  },
+
+  dusk: {
+    title: 'Dusk Murmuration', note: 'Swifts and lance swifts pour over a copper sunset pond; mantas cross high, the camera looking up through them.',
+    setting: { style: 'glitch', city: false, center: [0.5, 0.5], snow: false, glow: 1.1, vignette: 0.7, iris: 0,
+      water: { deep: '#2a1a3a', shallow: '#e08a5a', light: '#ffd0a0', shade: '#120a1c', fog: '#5a2a3c', ribbons: 0.9, net: 0.12, fogK: 0.00006, scale: 360, moon: 1 },
+      surface: { level: 0.25, colour: '#ffb080', opacity: 0.16, ribbons: 0.4, moon: 1 }, shafts: { amount: 0.5, colour: '#ffb070' }, mist: { amount: 0.2, colour: '#6a3a4a' } },
+    paths: {
+      sky: { through: [0.5, 0.5], along: 0.7, across: 0.3, angle: 12, square: 3 },
+      low: { through: [0.5, 0.5], along: 0.5, across: 0.4, angle: -30, square: 2.5 },
+    },
+    // the murmuration: swifts in two long streams over the water, lance swifts weaving through, mantas high, a few koi rising to the surface in the glow
+    cast: [
+      { species: 'swift', n: 60, role: 'stream', path: 'sky', z: [0.02, 0.1], speed: 0.6, width: 0.12 },
+      { species: 'ringed-lance-swift', n: 16, role: 'stream', path: 'low', reverse: true, z: [0.04, 0.14], speed: 0.55, width: 0.1 },
+      { species: 'manta', n: 3, role: 'formation', path: 'sky', z: [0.02, 0.02], speed: 0.3 },
+      { species: 'ringed-lance-monarch', n: 2, role: 'drift', layer: 'high', radius: 0.32, speed: 0.2 },
+      { species: 'koi', n: 20, role: 'school', layer: 'deep', radius: 0.36 },
+    ],
+    flora: { kind: 'pond', amount: 0.6 },
+    shots: [
+      { kind: 'ride', len: 11, target: 'swift' },
+      { kind: 'above', len: 11, target: 'center', zoom: 1.5 },
+      { kind: 'low', len: 10, target: 'center' },
+    ],
+    // backlit: the birds are silhouettes against the glow (dark bodies, no pattern); the koi and mantas keep their own looks
+    look: { creatures: 'styled',
+      styled: { base: { material: 'skin', pattern: 'none', bright: 0.3, fresnel: 0.5 }, paint: { paint: 0.5, paintSteps: 3, paintBrush: 1, paintWobble: 0.3, paintTemp: 0.5, paintDetail: 0.4, paintOutline: 0.4 }, lineAlpha: 0.1, backing: 1,
+        looks: { koi: { from: 'saved' }, manta: { from: 'saved' } } } },
   },
 };

@@ -127,7 +127,8 @@
     school(list, st, { rnd: ctx.rnd, bl: b, pos: (f) => [f.x, f.y], region: { x: c[0], z: c[1], r: rad / 0.82, random: (R) => { const a = R() * TAU, d = Math.sqrt(R()) * rad * 0.8; return [c[0] + Math.cos(a) * d, c[1] + Math.sin(a) * d]; } },
       depth: (x, y) => (inside(x, y) ? 1 : -1), zr: z, setZ: (f, zz, k) => setZ(ctx, f, zz, k), ease: 2.2, speed: r.speed || 1 }, dt);
   }
-  const ROLES = { stream, formation, escort, drift, bed, school: schoolRow };
+  const wild = (list) => { for (const f of list) f.steer = null; };   // wild: no steering, the ecosystem (hunting, fleeing, schooling) runs these
+  const ROLES = { stream, formation, escort, drift, bed, school: schoolRow, wild };
 
   function rows(ctx, cast) {
     const taken = new Set(), out = [];

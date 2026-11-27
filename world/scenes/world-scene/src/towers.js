@@ -35,17 +35,25 @@ uniform sampler2D uTex;
 // the other recipes (engraving, relief, saved ones) through the same function. styleFlat() sets it.
 ${StyleRecipes.GLSL}
 uniform float uRoute, uTone;
-// a place's moss (uMoss 0 = none): it climbs from the ground (uMossBase, z runs down) up the stone's height (uMossH), on what faces up and in
-// patches; as Forge Scenes' Overgrowth does it on the towers and walls
-uniform float uMoss, uMossBase, uMossH; uniform vec3 uMossC, uMossTip;
+// a place's growth on the stone (uMoss 0 = none): moss, frost, rust or fungus (uKind 0..3). It climbs from the ground (uMossBase, z runs down) up
+// the stone's height (uMossH), on what faces up and in patches, as Forge Scenes' Overgrowth does it. uWet is a wet sheen (a place's wet stone)
+uniform float uMoss, uMossBase, uMossH, uKind, uWet; uniform vec3 uMossC, uMossTip, uWetC;
 float mh(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float mn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(mh(i), mh(i + vec2(1, 0)), f.x), mix(mh(i + vec2(0, 1)), mh(i + vec2(1, 1)), f.x), f.y); }
 vec3 mossed(vec3 c, vec3 N) {
-  if (uMoss <= 0.0) return c;
-  float m = mn(vec2(vWorldPos.x + vWorldPos.y, vWorldPos.z) * 0.02) * 0.65 + mn(vec2(vWorldPos.x - vWorldPos.y, vWorldPos.z * 1.3) * 0.09) * 0.35;
-  float up = clamp((uMossBase - vWorldPos.z) / max(1.0, uMossH), 0.0, 1.0);
-  float moss = step(0.12, uMoss * 1.25 - up * 0.9 + (m - 0.5) * 0.6) * step(-0.2, -N.z + m - 0.5);
-  return mix(c, mix(uMossC, uMossTip, step(0.5, m)) * (0.75 + 0.25 * m), moss);
+  if (uMoss > 0.0) {
+    float m = mn(vec2(vWorldPos.x + vWorldPos.y, vWorldPos.z) * 0.02) * 0.65 + mn(vec2(vWorldPos.x - vWorldPos.y, vWorldPos.z * 1.3) * 0.09) * 0.35;
+    float up = clamp((uMossBase - vWorldPos.z) / max(1.0, uMossH), 0.0, 1.0), face = -N.z, cover;
+    if (uKind < 0.5 || uKind > 2.5) cover = step(0.12, uMoss * 1.25 - up * 0.9 + (m - 0.5) * 0.6) * step(-0.2, face + m - 0.5);   // moss and fungus: climbing, in clumps
+    else if (uKind < 1.5) cover = step(0.35, face * 0.9 + (m - 0.5) * 0.5 + uMoss * 0.45 - 0.2);                                    // frost: a cap on what faces up
+    else { float st = mn(vec2(vWorldPos.x * 0.06 + vWorldPos.y * 0.06, vWorldPos.z * 0.012)); cover = step(0.5, st * 0.8 + uMoss * 0.55 - up * 0.25) * step(0.3, m + 0.25); }   // rust: streaks running down
+    vec3 g = mix(uMossC, uMossTip, step(0.5, m)) * (0.75 + 0.25 * m);
+    if (uKind > 2.5) g += uMossTip * 0.35 * smoothstep(0.55, 0.9, m);   // fungus gives a little light
+    c = mix(c, g, cover);
+  }
+  if (uWet > 0.0) { vec3 V = normalize(uCam - vWorldPos), L = normalize(vec3(0.35, 0.55, -0.6)); float spec = pow(max(dot(reflect(-L, N), V), 0.0), 26.0), sheen = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+    c = c * (1.0 - 0.18 * uWet) + uWetC * (spec * 0.9 + sheen * 0.22) * uWet; }   // wet stone: darker, with a hard glint and a sheen at the edges
+  return c;
 }
 out vec4 o;
 void main() {

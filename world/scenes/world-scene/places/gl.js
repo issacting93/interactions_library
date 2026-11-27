@@ -68,13 +68,15 @@ void main(){ vec2 q = vP / uScale; vec3 c = uCol; float a = uA;
   // light shafts, a dip to dark across a cut, and a soft vignette
   const OVER_FS = `#version 300 es
 precision highp float; in vec2 vUv; out vec4 o;
-uniform float uT, uShaft, uFade, uVig, uAsp; uniform vec3 uShaftC, uFadeC; uniform vec2 uSrc;
+uniform float uT, uShaft, uFade, uVig, uAsp, uMist; uniform vec3 uShaftC, uFadeC, uMistC; uniform vec2 uSrc;
 ${NOISE}
 void main(){ vec2 p = (vUv - uSrc) * vec2(uAsp, 1.0); float ang = atan(p.x, -p.y), r = length(p);
   float rays = smoothstep(0.55, 0.95, vn(vec2(ang * 9.0 + uT * 0.05, 0.0))) * smoothstep(0.55, 0.9, vn(vec2(ang * 23.0 - uT * 0.07, 3.0)) * 0.6 + 0.5);
   float s = rays * exp(-r * 1.1) * uShaft;
   vec2 v = (vUv - 0.5) * vec2(uAsp, 1.0) * 2.0; float vig = smoothstep(0.7, 1.8, length(v)) * uVig;
-  o = vec4(uShaftC * s * (1.0 - uFade) + uFadeC * uFade, max(vig, uFade)); }`;   // drawn ONE, ONE_MINUS_SRC_ALPHA: shafts add, the vignette and the dip darken
+  // mist: banks of fog drifting across the picture, thicker low down (a place's setting.mist)
+  float mist = 0.0; if (uMist > 0.0) { vec2 mq = vec2(vUv.x * uAsp * 2.2 + uT * 0.02, vUv.y * 2.4 - uT * 0.012); mist = smoothstep(0.35, 0.85, fbm(mq) * 0.75 + fbm(mq * 2.3 + 4.0) * 0.35) * uMist * (0.45 + 0.55 * (1.0 - vUv.y)); }
+  o = vec4(uShaftC * s * (1.0 - uFade) + uFadeC * uFade + uMistC * mist * 0.6, max(max(vig, uFade), mist * 0.6)); }`;   // drawn ONE, ONE_MINUS_SRC_ALPHA: shafts add, the vignette and the dip darken
   let P = null;
   const progs = () => P || (P = { floor: program(QUAD_VS, FLOOR_FS), surf: program(SURF_VS, SURF_FS), over: program(QUAD_VS, OVER_FS) });
   window.ENVX_GL = { progs };

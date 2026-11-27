@@ -25,7 +25,7 @@
   // ------------------------------------------------------------------ the vocabulary the editor offers
   const ROLESLIB = window.EcologyRoles, LAYERS = ROLESLIB.LAYERS;   // the roles, paths and depth bands: packages/ecology/ecology-roles.js (shared with Forge Scenes)
   const LAYER_NAMES = { high: 'High air', air: 'Air', surface: 'Surface', mid: 'Mid-water', deep: 'Deep', bed: 'Bed' };
-  const ROLE_NAMES = { stream: 'Stream', formation: 'Formation', escort: 'Escort', drift: 'Drift', school: 'School', bed: 'Crawl the bed' };   // stream and formation follow a path; escort keeps behind another species; drift turns round the middle; school: Forge Scenes' koi
+  const ROLE_NAMES = { stream: 'Stream', formation: 'Formation', escort: 'Escort', drift: 'Drift', school: 'School', bed: 'Crawl the bed', wild: 'Wild (the ecosystem)' };   // stream and formation follow a path; escort keeps behind another species; drift turns round the middle; school: Forge Scenes' koi
   const SHOT_NAMES = { above: 'Above', ride: 'Ride behind', follow: 'Follow', beneath: 'From beneath', descent: 'Descent', orbit: 'Orbit', lookup: 'Look up', low: 'Low across' };
   const zOf = ROLESLIB.zOf;
   const layerOf = (r) => { if (r.layer) return r.layer; if (r.z) for (const k in LAYERS) if (LAYERS[k][0] === r.z[0] && LAYERS[k][1] === r.z[1]) return k; return 'custom'; };
@@ -95,7 +95,7 @@
   // ------------------------------------------------------------------ loading a place
   const STORE = 'forge:world-places';
   const saved = () => { try { return JSON.parse(localStorage.getItem(STORE) || '{}'); } catch (e) { return {}; } };
-  const PLACES_V = 3;   // the built-in places' version: raise it when they are redesigned
+  const PLACES_V = 4;   // the built-in places' version: raise it when they are redesigned
   function keep() { try { const s = saved(); if (X.P && X.id !== 'world') { X.P._v = PLACES_V; s[X.id] = X.P; } localStorage.setItem(STORE, JSON.stringify(s)); } catch (e) { /* storage off */ } }
   function allPlaces() { const out = {}, base = window.WorldPlaces || { world: { title: 'World' } }, mine = saved();
     for (const k in base) out[k] = clone(base[k]);
@@ -103,11 +103,11 @@
     return out; }
   X.edited = (id) => { const m = saved()[id]; return !!m && (!(window.WorldPlaces || {})[id] || m._v === PLACES_V); };
   let snap = null;
-  const SKEYS = ['count', 'snow', 'glow', 'shimmer', 'dark', 'trail', 'beh', 'flow', 'ptr', 'dz', 'routeAtmo', 'wings', 'view', 'orbit', 'style', 'tilt', 'yaw', 'zoom', 'projection', 'hud'];
+  const SKEYS = ['count', 'snow', 'glow', 'shimmer', 'dark', 'trail', 'beh', 'flow', 'ptr', 'dz', 'routeAtmo', 'wings', 'view', 'orbit', 'style', 'irisMode', 'tilt', 'yaw', 'zoom', 'projection', 'hud'];
   function setStyle(id) { if (!id || S.style === id) return; if (window.ForgeCityHost && ForgeCityHost.setStyle) ForgeCityHost.setStyle(id); else { const sel = document.getElementById('style-pick'); if (sel) { sel.value = id; sel.dispatchEvent(new Event('change')); } } }
   // the place's depth (or World's, coming back): the slider shows it, and the city stands on the new floor
   function syncDepth() { const el = document.getElementById('dz'), o = document.getElementById('o-dz'); if (el) { el.value = S.dz; if (o) o.textContent = Math.round(S.dz * 100) + '%'; } if (typeof cityFollowDepth === 'function') cityFollowDepth(); }
-  function applySetting() { const st = X.P.setting || {}; setStyle(st.style); Object.assign(S, { snow: !!st.snow, glow: st.glow ?? 0.8, shimmer: 0, dark: 0, trail: 0, beh: 'off', flow: 'free', ptr: 'scatter', dz: st.dz || 0.8, routeAtmo: false, view: 'angle', orbit: false, yaw: 0, zoom: 1, tilt: 38, hud: false }); cam.yawT = 0; camPan[0] = camPan[1] = camPan[2] = 0; syncDepth(); syncControls(); X.setDirected(X.shotsOn);
+  function applySetting() { const st = X.P.setting || {}; setStyle(st.style); Object.assign(S, { snow: !!st.snow, glow: st.glow ?? 0.8, shimmer: 0, dark: 0, trail: 0, beh: st.life ? 'on' : 'off', irisMode: st.iris ?? 0, flow: 'free', ptr: 'scatter', dz: st.dz || 0.8, routeAtmo: false, view: 'angle', orbit: false, yaw: 0, zoom: 1, tilt: 38, hud: false }); cam.yawT = 0; camPan[0] = camPan[1] = camPan[2] = 0; syncDepth(); syncControls(); X.setDirected(X.shotsOn);
     for (const id of ['r-city', 'r-tower']) { const b = document.getElementById(id); if (b) b.hidden = !st.city; } }
   function applyCast(warm) { for (const sp of SPECIES) sim.pop[sp.key] = 0; Object.assign(sim.pop, castPop(X.P)); S.count = sim.POP_TOTAL; EcologySim.setCount(sim);   // count = POP_TOTAL: the numbers given are the numbers spawned
     for (const f of sim.fish) { f.steer = null; f._lane = f._s = f._ph = f._hx = null; } seedR = 12345; X.R.st = []; X.R.wb = null; if (warm) X.warm(warm); }
@@ -117,7 +117,7 @@
     if (id === 'world') { if (snap) { for (const k of SKEYS) if (k !== 'style') S[k] = snap.S[k]; Object.assign(sim.pop, snap.pop); EcologySim.setCount(sim); setStyle(snap.S.style); snap = null; syncDepth(); syncControls(); }
       X.P = null; X.R = null; X.bodies = 'specimen'; window.PlaceFlora && PlaceFlora.clear(); for (const b of ['r-city', 'r-tower']) { const e = document.getElementById(b); if (e) e.hidden = false; } }
     else { X.P = X.places[id]; X.R = { st: [] }; X.id = id; applySetting(); X.R.c = centerOf(X.P); X.R.paths = buildPaths(X.P, X.R.c); X.bodies = (X.P.look && X.P.look.creatures) || 'specimen'; applyCast(25); X.replant(); }
-    X.id = id; document.body.classList.toggle('in-place', id !== 'world'); X.shotT = 0; X.shot = null; cam.fc = null; syncLink(); X.ui && X.ui.refresh(); return id; };
+    X.id = id; document.body.classList.toggle('in-place', id !== 'world'); document.body.classList.toggle('place-life', !!(X.P && X.P.setting && X.P.setting.life)); X.shotT = 0; X.shot = null; cam.fc = null; syncLink(); X.ui && X.ui.refresh(); return id; };
   X.reset = () => { const s = saved(); delete s[X.id]; try { localStorage.setItem(STORE, JSON.stringify(s)); } catch (e) { /* */ } X.set(X.id); };
   X.hides = (layer) => !!(X.P && X.P.setting && !X.P.setting.city && ['city', 'towers', 'walkers', 'terrain'].includes(layer)) || !!(X.P && layer === 'terrain');
   X.tick = function (dt) { if (!X.P) return; runCast(dt); X.shotT += dt; };
@@ -151,7 +151,7 @@
     const O = st.shafts || {}, p = progs().over, u = p.u;
     gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.useProgram(p.p); gl.bindVertexArray(quadVAO);
-    gl.uniform1f(u.uT, t); gl.uniform1f(u.uShaft, O.amount || 0); gl.uniform1f(u.uFade, X.fade); gl.uniform1f(u.uVig, st.vignette || 0); gl.uniform1f(u.uAsp, vw / Math.max(1, vh));
+    gl.uniform1f(u.uT, t); gl.uniform1f(u.uShaft, O.amount || 0); gl.uniform1f(u.uFade, X.fade); gl.uniform1f(u.uVig, st.vignette || 0); gl.uniform1f(u.uMist, (st.mist && st.mist.amount) || 0); gl.uniform3fv(u.uMistC, hex((st.mist && st.mist.colour) || '#8fa8b8')); gl.uniform1f(u.uAsp, vw / Math.max(1, vh));
     gl.uniform3fv(u.uShaftC, hex(O.colour || '#ffffff')); gl.uniform3fv(u.uFadeC, [0, 0, 0]); gl.uniform2fv(u.uSrc, [0.5, 1.25]);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.disable(gl.BLEND); gl.enable(gl.DEPTH_TEST); };
@@ -159,9 +159,14 @@
   // ------------------------------------------------------------------ the creatures, solid: the shared renderer (packages/render/ecology-render.js) in this page's context
   const toHex = (c) => '#' + c.map((v) => Math.round(clamp(v, 0, 1) * 255).toString(16).padStart(2, '0')).join('');
   function styledLook(sp, savedLook) { const Y = (X.P.look && X.P.look.styled) || {}, row = (X.P.cast || []).find((r) => r.species === sp.key);
-    let L = (Y.looks && Y.looks[sp.key]) || (Y.all ? Object.assign({}, Y.all) : null) || (savedLook && savedLook.material !== 'own' ? savedLook : null);   // all: one look for every creature (Lantern Vigil's Energy)
+    // a creature's look, first found: its own (styled.looks[key]; { from: 'saved' } keeps its saved Specimen look), one for all (styled.all: Lantern Vigil's Energy),
+    // the place's base over the creature's own colours (styled.base { material, pattern, ..., bright (0.3 = dark bodies), colors (one set for all) }), else the saved look
+    let L = Y.looks && Y.looks[sp.key]; if (L && L.from === 'saved') L = savedLook && savedLook.material !== 'own' ? savedLook : null;
+    if (!L) L = Y.all ? Object.assign({}, Y.all) : null;
+    if (!L && !Y.base) L = savedLook && savedLook.material !== 'own' ? savedLook : null;
     if (L && L.preset) L = EcologyRender.preset(L.preset, L);   // { preset: 'energy', colors: [...] }: the material's start, then the look's own
-    if (!L) { const hi = sp.colHi || [0.8, 0.8, 0.8], lo = sp.colLo || hi.map((v) => v * 0.5); L = { material: 'skin', pattern: 'veins', colors: [toHex(hi), toHex(lo.map((v) => v * 0.6)), toHex(hi), toHex(hi), toHex(lo)] }; }
+    if (!L) { const k = (Y.base && Y.base.bright) ?? 1, hi = (sp.colHi || [0.8, 0.8, 0.8]).map((v) => v * k), lo = (sp.colLo || hi.map((v) => v * 0.5)).map((v) => v * k);
+      L = Object.assign({ material: 'skin', pattern: 'veins', colors: [toHex(hi), toHex(lo.map((v) => v * 0.6)), toHex(hi), toHex(hi), toHex(lo)] }, Y.base); delete L.bright; }
     if (row && row.stone) L = Object.assign({}, L, Y.stone || { material: 'golem', grow: 'moss', growAmount: 0.5 });   // stone keeps the creature's own colours
     if (Y.paint) L = Object.assign({}, L, Y.paint);
     return L; }
@@ -184,13 +189,19 @@
     const st = P.setting || {}, TD = groundZ();   // the plants stand on the ground (under the city's edge when it stands)
     X.R.flora = PlaceFlora.plant(F, { gl, TW: tankW(), TH: tankH(), TD, U: worldUnit(), C: X.R.c, seed: 7, surfZ: ((st.surface && st.surface.level) ?? 0) * tankDepth(),
       towers: st.city ? towerInfo() : [], city: st.city ? { r: CITY_FOOTPRINT_FRAC * tankW() * 0.9 } : null }); };
-  // the place's moss (setting.moss): how much now (0..1.05, growing over the loop when it is a timelapse), its two colours, and the stone's height
-  X.moss = function () { const M = X.P && X.P.setting && X.P.setting.moss; if (!M) return null; const total = X.total() || 30, u = ((X.shotT % total) + total) % total / total;
-    const k = M.timelapse ? ease(clamp((u - 0.02) / 0.85, 0, 1)) : 1, tw = (typeof placedTowers !== 'undefined' ? placedTowers : []).filter((q) => q && q.built), h = tw.reduce((a, q) => Math.max(a, q.built.top * q.scale), 0);
-    return { amount: (M.amount ?? 1) * k * 1.05, c: hex(M.colour || '#3f6a2c'), tip: hex(M.tip || '#8fae4a'), base: groundZ(), h: h || tankDepth() * 0.5 }; };
-  // the stone's moss uniforms (towers and city share towerProg): set for the frame, cleared after
-  X.mossStone = function (on) { const u = towerProg.u, m = on ? X.moss() : null; gl.useProgram(towerProg.p);
-    gl.uniform1f(u.uMoss, m ? m.amount : 0); if (m) { gl.uniform1f(u.uMossBase, m.base); gl.uniform1f(u.uMossH, m.h); gl.uniform3fv(u.uMossC, m.c); gl.uniform3fv(u.uMossTip, m.tip); } };
+  // what grows on the stone and the ground (setting.growth: { kind moss|frost|rust|fungus, amount, colour, tip, timelapse, seasons }): how much now, which kind, its
+  // two colours, and the stone's height. A timelapse grows in over the loop as the plants do; seasons runs frost, moss, fungus and rust one after another.
+  const GROWTH = { moss: { i: 0, c: '#3f6a2c', tip: '#8fae4a' }, frost: { i: 1, c: '#a9c8da', tip: '#f4fbff' }, fungus: { i: 3, c: '#7a6a52', tip: '#e8c88a' }, rust: { i: 2, c: '#5e2a12', tip: '#d0773a' } };
+  const SEASONS = ['frost', 'moss', 'fungus', 'rust'], sstep = (a, b, v) => ease(clamp((v - a) / (b - a), 0, 1));
+  X.moss = function () { const st = X.P && X.P.setting, M = st && (st.growth || st.moss); if (!M) return null; const total = X.total() || 30, u = ((X.shotT % total) + total) % total / total;
+    let kind = M.kind || 'moss', k = M.timelapse ? ease(clamp((u - 0.02) / 0.85, 0, 1)) : 1;
+    if (M.seasons) { const q = u * 4, f = q - Math.floor(q); kind = SEASONS[Math.floor(q) % 4]; k = sstep(0, 0.4, f) * (1 - sstep(0.82, 1, f)); }
+    const G = GROWTH[kind] || GROWTH.moss, tw = (typeof placedTowers !== 'undefined' ? placedTowers : []).filter((q) => q && q.built), h = tw.reduce((a, q) => Math.max(a, q.built.top * q.scale), 0);
+    return { amount: (M.amount ?? 1) * k * 1.05, kind: G.i, c: hex(M.seasons || !M.colour ? G.c : M.colour), tip: hex(M.seasons || !M.tip ? G.tip : M.tip), base: groundZ(), h: h || tankDepth() * 0.5 }; };
+  // the stone's uniforms (towers and city share towerProg): set for the frame, cleared after
+  X.mossStone = function (on) { const u = towerProg.u, m = on ? X.moss() : null, W = on && X.P && X.P.setting.wet; gl.useProgram(towerProg.p);
+    gl.uniform1f(u.uMoss, m ? m.amount : 0); if (m) { gl.uniform1f(u.uMossBase, m.base); gl.uniform1f(u.uMossH, m.h); gl.uniform1f(u.uKind, m.kind); gl.uniform3fv(u.uMossC, m.c); gl.uniform3fv(u.uMossTip, m.tip); }
+    gl.uniform1f(u.uWet, W ? W.amount ?? 1 : 0); if (W) gl.uniform3fv(u.uWetC, hex(W.colour || '#cfe8ff')); };
   X.plants = function (t) { if (!X.P || !X.P.flora || !window.PlaceFlora || !PlaceFlora.count) return;
     const total = X.total() || 30, u = ((X.shotT % total) + total) % total / total, grow = PlaceFlora.timelapse ? ease(clamp((u - 0.02) / 0.85, 0, 1)) * 16 : undefined;
     const Fl = W() || {}, sky = Fl.fog ? hex(Fl.fog) : [0, 0, 0], v = [X.R.c[0] - cam.eye[0], X.R.c[1] - cam.eye[1]], vl = Math.hypot(v[0], v[1]) || 1;
