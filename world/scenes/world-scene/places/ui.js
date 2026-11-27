@@ -49,7 +49,8 @@
         <p class="note">Edits are kept in this browser. Copy JSON gives the place as data, to paste into places/places.js. Reset puts a built-in place back as shipped.</p>
       </div></section>`;
     { const cd = document.getElementById('cam-directed'); if (cd) { const sh = document.createElement('div'); sh.id = 'pl-camera'; sh.className = 'place-only'; cd.insertAdjacentElement('afterend', sh); } }   // the shot list lives in the Camera tab, under Directed/Free
-    { const tl = document.getElementById('tab-look'); if (tl) { const lk = document.createElement('div'); lk.id = 'pl-look'; lk.className = 'place-only'; tl.insertBefore(lk, tl.firstChild); } }   // this place's creature look sits at the top of the Look tab
+    { const tl = document.getElementById('tab-look'); if (tl) { const lk = document.createElement('div'); lk.id = 'pl-look'; lk.className = 'place-only'; const ls = document.getElementById('look-style'); if (ls) ls.insertAdjacentElement('afterend', lk); else tl.insertBefore(lk, tl.firstChild); } }   // this place's creature look sits at the top of the Look tab
+    { const sp = document.getElementById('style-pick'); if (sp) sp.addEventListener('change', () => { if (X.P && X.P.setting && X.P.setting.style !== sp.value) { X.P.setting.style = sp.value; edited('setting'); } }); }   // in a place the one Style picker (Look tab) is also the place's style
     dock.insertBefore(grp, dock.firstChild);
     railModes.unshift(['r-places', 'mode-places']);
     btn.addEventListener('click', () => { const already = btn.getAttribute('aria-selected') === 'true'; if (already) setDock(dockEl().hidden); else { showMode('r-places'); if (dockEl().hidden) setDock(true); } });
@@ -74,10 +75,6 @@
   const seg = (name, opts, cur, on) => { const d = el('div', { class: 'seg', role: 'radiogroup' }); d.innerHTML = opts.map(([v, l]) => `<input type="radio" name="${name}" id="${name}-${v}" value="${v}" ${v === cur ? 'checked' : ''}><label for="${name}-${v}">${l}</label>`).join('');
     d.querySelectorAll('input').forEach((r) => r.onchange = () => r.checked && on(r.value)); return d; };
   function settingPanel() { const box = document.getElementById('pl-setting'); box.innerHTML = ''; const st = X.P.setting, w = st.water || (st.water = {}), sf = st.surface || (st.surface = { level: 0.3, colour: '#2fb3a0', opacity: 0 }), sh = st.shafts || (st.shafts = { amount: 0 });
-    const k = el('div', { class: 'grp' }, '<span class="lbl">Style</span>'); const sel = el('select', { class: 'panel-select' });
-    const src = document.getElementById('style-pick'); sel.innerHTML = src ? src.innerHTML : ''; sel.value = st.style || '';   // the same recipes as the drawer's Style
-    sel.onchange = () => { st.style = sel.value; edited('setting'); }; k.appendChild(sel); box.appendChild(k);
-    if (!st.city) box.appendChild(el('p', { class: 'note' }, 'No city here, so Glitch (the dark default) only sets the sky. Pick a style to give it that sky; buildings take it when this place has a city.'));
     // the city: none, World's, or this place's own (its seed, towers, the main tower's design, how much has fallen); a turned-off plan is kept to turn back on
     const cur = !st.city ? 'off' : typeof st.city === 'object' ? 'own' : 'on';
     const c = el('div', { class: 'grp' }, '<span class="lbl">City</span>'); c.appendChild(seg('pl-city', [['own', 'Its own'], ['on', "World's"], ['off', 'None']], cur, (v) => {
@@ -151,10 +148,10 @@
   function lookPanel() { const box = document.getElementById('pl-look'); box.innerHTML = ''; const P = X.P, L = P.look || (P.look = {}), Y = L.styled || (L.styled = {}), Pt = Y.paint || (Y.paint = { paint: 0 });
     box.appendChild(el('h2', null, 'This place\'s creatures'));
     const g = el('div', { class: 'grp' }, '<span class="lbl">Draw as</span>');
-    g.appendChild(seg('pl-bodies', [['specimen', 'Specimen'], ['styled', 'Styled'], ['flat', 'Lines']], X.bodies, (v) => { X.bodies = L.creatures = v; edited('look'); lookPanel(); })); box.appendChild(g);
-    box.appendChild(el('p', { class: 'note' }, X.bodies === 'specimen' ? 'Each creature in its saved look, drawn as Specimen draws it.' : X.bodies === 'styled' ? 'This place’s own paint over every creature; rows marked Stone in the cast are turned to stone.' : 'World Scene’s own line drawing.'));
+    g.appendChild(seg('pl-bodies', [['specimen', 'Saved'], ['styled', 'Painted'], ['flat', 'Lines']], X.bodies, (v) => { X.bodies = L.creatures = v; edited('look'); lookPanel(); })); box.appendChild(g);
+    box.appendChild(el('p', { class: 'note' }, X.bodies === 'specimen' ? 'Each creature in its own saved look, as Specimen draws it.' : X.bodies === 'styled' ? 'This place’s own paint over every creature (the Creature paint below); rows marked Stone in the cast are turned to stone.' : 'World Scene’s own line drawing.'));
     if (X.bodies !== 'styled') return;
-    box.appendChild(el('h2', null, 'Place style'));
+    box.appendChild(el('h2', null, 'Creature paint'));
     const kn = el('div', { class: 'knobs' });
     kn.append(range('Paint', () => Pt.paint ?? 0, (v) => { Pt.paint = v; edited('look'); }, 0, 1, 0.05), range('Steps', () => Pt.paintSteps ?? 4, (v) => { Pt.paintSteps = v; edited('look'); }, 2, 8, 1, (v) => v),
       range('Warmth', () => Pt.paintTemp ?? 0.4, (v) => { Pt.paintTemp = v; edited('look'); }, 0, 1, 0.05), range('Detail', () => Pt.paintDetail ?? 0.5, (v) => { Pt.paintDetail = v; edited('look'); }, 0, 1, 0.05),
