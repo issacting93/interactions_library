@@ -201,7 +201,7 @@ function loop(now) {
   fpsAcc += dt; fpsN++;
   if (now - fpsT > 500) {
     fpsEl.textContent = Math.round(fpsN / Math.max(fpsAcc, 1e-3));
-    let pts = S.mode !== 'sigil' ? sim.fish.length * CLOUD_N * S.density : 0;
+    let pts = S.mode === 'both' || S.mode === 'cloud' ? sim.fish.length * CLOUD_N * S.density : 0;
     if (S.mode !== 'cloud') for (const f of sim.fish) pts += SPECIES[f.sp].counts.fillVerts + SPECIES[f.sp].counts.lineVerts;
     vertsEl.textContent = `${sim.fish.length} alive · ${new Set(sim.fish.map(f => f.sp)).size} kinds · ${sim.tally.reduce((a, t) => a + t.eaten, 0)} eaten · ${(pts / 1000).toFixed(0)}k points`;
     refreshEco();

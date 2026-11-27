@@ -53,3 +53,13 @@ document.getElementById('hide-all').addEventListener('click', () => setPanelsHid
 const quickBtn = document.getElementById('r-quick');
 quickBtn.addEventListener('click', () => { const open = !document.body.classList.contains('drawer-open'); document.body.classList.toggle('drawer-open', open); quickBtn.setAttribute('aria-pressed', String(open)); });
 if (vw <= 760) setDock(false);            // phones start with the tank, not the panel
+
+// Tank depth moves the floor: the city and its towers stand at 0.92 of the depth, so they are built again where the new floor is (same seed,
+// same towers) -- otherwise the creatures and a place's plants would move and the city stay put. On letting go of the slider, and when a
+// place sets its own depth (places/engine.js)
+function cityFollowDepth() {
+  if (Math.abs(cityBuiltTD - tankDepth()) < 0.5) return false;
+  buildPlacedCity(lastCitySeed || S.seed, +document.getElementById('world-towers').value || 3);
+  refreshVortices(); refreshCityGenPanels(); return true;
+}
+document.getElementById('dz').addEventListener('change', () => { if (cityFollowDepth() && window.ENVX && ENVX.P) ENVX.replant(); });

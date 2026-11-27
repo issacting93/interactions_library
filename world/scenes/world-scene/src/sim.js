@@ -233,7 +233,7 @@ function updateCamera(dt) {
   // so objects at the focal distance read the same size switching projections -- only how size changes
   // with depth differs (ortho: not at all; perspective: nearer reads bigger), which is the whole point
   const proj = S.projection === 'ortho' ? M4.ortho(2 * dist * Math.tan(fov / 2) * aspect, 2 * dist * Math.tan(fov / 2), near, far) : M4.persp(fov, aspect, near, far);
-  cam.vp = M4.mul(proj, view); cam.ivp = M4.inv(cam.vp); cam.eye = eye; cam.refDist = frameDist;
+  cam.vp = M4.mul(proj, view); cam.ivp = M4.inv(cam.vp); cam.eye = eye; cam.refDist = frameDist; cam.dist = dist;   // dist: how far the camera really is (zoom, follow, a shot), for line widths in world units
   cam.shift = 1 - vis;
   cam.shiftX = (coverL - coverR) / vw;                  // centred between the rack on the left and the dock on the right
 }

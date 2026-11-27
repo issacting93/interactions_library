@@ -34,7 +34,10 @@
   const keyOf = (f) => SPECIES[f.sp].key, bl = (f) => EcologySim.bodyLen(sim, f);
   const live = (keys) => sim.fish.filter((f) => !f.dead && keys.includes(keyOf(f)));
   const specName = (k) => { const s = SPECIES.find((x) => x.key === k); return s ? s.name : k; };
-  function holdZ(f, z, k) { f.z += (z - f.z) * k; f.zGoal = z; const TD = tankDepth(); if (f.cz) for (let i = 0; i < f.cz.length; i++) f.cz[i] += (z * TD - f.cz[i]) * k; }
+  // the place's ground: where the city stands (src/towers.js builds it at 0.92 of the tank's depth), else the tank's floor. The floor, the plants
+  // and the bed all sit on it, so nothing swims or grows under the city
+  const groundZ = () => tankDepth() * (X.P && X.P.setting && X.P.setting.city ? 0.92 : 1);
+  function holdZ(f, z, k) { z = Math.min(z, groundZ() / tankDepth() - 0.015); f.z += (z - f.z) * k; f.zGoal = z; const TD = tankDepth(); if (f.cz) for (let i = 0; i < f.cz.length; i++) f.cz[i] += (z * TD - f.cz[i]) * k; }
 
   // ------------------------------------------------------------------ the place at run time
   const X = { id: 'world', P: null, R: null, places: {}, shotsOn: true, manualOn: false, shotT: 0, shot: null, fade: 0, bodies: 'specimen' };
@@ -50,8 +53,8 @@
   const castPop = (P) => { const o = {}; for (const r of P.cast || []) o[r.species] = (o[r.species] || 0) + (r.n | 0); return o; };
 
   // shadows on the floor: what is over the surface casts a broad one; what swims under it a soft small one
-  function shadows() { const P = X.P, out = []; if (!P || !P.cast) return out; const TD = tankDepth(), lev = (P.setting.surface || {}).level || 0, sun = [0.45, 0.3], lists = rowLists(P);
-    const add = (f, wing, k) => { const h = TD - f.z * TD, b = bl(f); out.push([f.x + sun[0] * h * 0.35, f.y + sun[1] * h * 0.35, b * (1 + h / TD * 0.25), f.ang, wing, clamp(0.35 + h / TD * 0.6, 0.3, 0.95), k * (1 - h / TD * 0.45)]); };
+  function shadows() { const P = X.P, out = []; if (!P || !P.cast) return out; const TD = groundZ(), lev = (P.setting.surface || {}).level || 0, sun = [0.45, 0.3], lists = rowLists(P);
+    const add = (f, wing, k) => { const h = TD - f.z * tankDepth(), b = bl(f); out.push([f.x + sun[0] * h * 0.35, f.y + sun[1] * h * 0.35, b * (1 + h / TD * 0.25), f.ang, wing, clamp(0.35 + h / TD * 0.6, 0.3, 0.95), k * (1 - h / TD * 0.45)]); };
     P.cast.forEach((r, i) => { if (zOf(r)[1] < lev) for (const f of lists[i]) if (out.length < 64) add(f, 2.1, 0.55); });
     if (lev > 0.1) P.cast.forEach((r, i) => { if (zOf(r)[0] >= lev && zOf(r)[0] < 0.9) for (const f of lists[i]) if (out.length < 64) add(f, 0.9, 0.3); });
     return out; }
@@ -98,14 +101,16 @@
   let snap = null;
   const SKEYS = ['count', 'snow', 'glow', 'shimmer', 'trail', 'beh', 'flow', 'mode', 'dz', 'routeAtmo', 'wings', 'view', 'orbit', 'style'];
   function setStyle(id) { if (!id || S.style === id) return; if (window.ForgeCityHost && ForgeCityHost.setStyle) ForgeCityHost.setStyle(id); else { const sel = document.getElementById('style-pick'); if (sel) { sel.value = id; sel.dispatchEvent(new Event('change')); } } }
-  function applySetting() { const st = X.P.setting || {}; setStyle(st.style); Object.assign(S, { snow: !!st.snow, glow: st.glow ?? 0.8, shimmer: 0, trail: 0, beh: 'off', flow: 'free', mode: 'sigil', dz: st.dz || 0.8, routeAtmo: false });
+  // the place's depth (or World's, coming back): the slider shows it, and the city stands on the new floor
+  function syncDepth() { const el = document.getElementById('dz'), o = document.getElementById('o-dz'); if (el) { el.value = S.dz; if (o) o.textContent = Math.round(S.dz * 100) + '%'; } if (typeof cityFollowDepth === 'function') cityFollowDepth(); }
+  function applySetting() { const st = X.P.setting || {}; setStyle(st.style); Object.assign(S, { snow: !!st.snow, glow: st.glow ?? 0.8, shimmer: 0, trail: 0, beh: 'off', flow: 'free', dz: st.dz || 0.8, routeAtmo: false }); syncDepth();
     for (const id of ['r-city', 'r-tower']) { const b = document.getElementById(id); if (b) b.hidden = !st.city; } }
   function applyCast(warm) { for (const sp of SPECIES) sim.pop[sp.key] = 0; Object.assign(sim.pop, castPop(X.P)); S.count = sim.POP_TOTAL; EcologySim.setCount(sim);   // count = POP_TOTAL: the numbers given are the numbers spawned
     for (const f of sim.fish) { f.steer = null; f._lane = f._s = f._ph = f._hx = null; } seedR = 12345; X.R.st = []; X.R.wb = null; if (warm) X.warm(warm); }
   X.set = function (id) { X.places = allPlaces(); if (!X.places[id]) id = 'world';
     if (id !== 'world' && !snap) { snap = { S: {}, pop: Object.assign({}, sim.pop) }; for (const k of SKEYS) snap.S[k] = S[k]; }
     for (const f of sim.fish) f.steer = null;
-    if (id === 'world') { if (snap) { for (const k of SKEYS) if (k !== 'style') S[k] = snap.S[k]; Object.assign(sim.pop, snap.pop); EcologySim.setCount(sim); setStyle(snap.S.style); snap = null; }
+    if (id === 'world') { if (snap) { for (const k of SKEYS) if (k !== 'style') S[k] = snap.S[k]; Object.assign(sim.pop, snap.pop); EcologySim.setCount(sim); setStyle(snap.S.style); snap = null; syncDepth(); }
       X.P = null; X.R = null; X.bodies = X.worldBodies; window.PlaceFlora && PlaceFlora.clear(); for (const b of ['r-city', 'r-tower']) { const e = document.getElementById(b); if (e) e.hidden = false; } }
     else { X.P = X.places[id]; X.R = { st: [] }; X.id = id; applySetting(); X.R.c = centerOf(X.P); X.R.paths = buildPaths(X.P, X.R.c); X.bodies = (X.P.look && X.P.look.creatures) || 'specimen'; applyCast(25); X.replant(); }
     X.id = id; X.shotT = 0; X.shot = null; cam.fc = null; ECO && (ECO._looksFor = null); syncLink(); X.ui && X.ui.refresh(); return id; };
@@ -124,7 +129,7 @@
   X.under = function (t) { if (!X.P || !W()) return; const p = progs().floor, u = p.u, F = W(), sh = shadows();
     gl.disable(gl.DEPTH_TEST); gl.depthMask(false); gl.disable(gl.BLEND);
     gl.useProgram(p.p); gl.bindVertexArray(quadVAO);
-    gl.uniformMatrix4fv(u.uIVP, false, cam.ivp); gl.uniform3fv(u.uEye, cam.eye); gl.uniform1f(u.uFloorZ, tankDepth()); gl.uniform1f(u.uT, t);
+    gl.uniformMatrix4fv(u.uIVP, false, cam.ivp); gl.uniform3fv(u.uEye, cam.eye); gl.uniform1f(u.uFloorZ, groundZ()); gl.uniform1f(u.uT, t);
     gl.uniform1f(u.uScale, F.scale || 400); gl.uniform1f(u.uRib, F.ribbons ?? 0.8); gl.uniform1f(u.uRibK, 1); gl.uniform1f(u.uNet, F.net ?? 0.1); gl.uniform1f(u.uFogK, F.fogK ?? 0.0001); gl.uniform1f(u.uMoon, F.moon || 0);
     gl.uniform3fv(u.uDeep, hex(F.deep)); gl.uniform3fv(u.uShallow, hex(F.shallow)); gl.uniform3fv(u.uRibC, hex(F.light)); gl.uniform3fv(u.uFogC, hex(F.fog)); gl.uniform3fv(u.uShC, hex(F.shade));
     gl.uniform2f(u.uTank, tankW(), tankH());
@@ -161,12 +166,12 @@
     if (Y.paint) L = Object.assign({}, L, Y.paint);
     return L; }
   X.worldBodies = 'specimen';   // World itself: its creatures in 3D as Specimen draws them, or World Scene's own line drawing
-  X.solid = () => !!(X.bodies !== 'flat' && window.EcologyRender && window.PartSolid);
+  X.solid = () => !!(S.mode === '3d' && X.bodies !== 'flat' && window.EcologyRender && window.PartSolid);   // the drawer's Draw: 3D; a place's Look can still ask for Lines
   X.creatures = function (t) { const ER = window.EcologyRender, ES0 = window.EcologySpeciesPristine || EcologySpecies;
     if (!ECO) { ECO = ER.create(canvas, ES0, { maxFish: MAX_FISH }); ECO._looksFor = null; ECO.ghostCap = 360; }   // trails (a look's trail, as Energy's): 360 past poses in all, shared out
     const lk = X.id + ':' + X.bodies + ':' + X.lookRev; if (ECO._looksFor !== lk) { ECO._looksFor = lk; const CL = window.CreatureLooks || {};
       ES0.SPECIES.forEach((sp, i) => { const sv = CL[sp.key]; ER.setLook(ECO, i, X.bodies === 'styled' && X.P ? styledLook(sp, sv) : (sv && sv.material !== 'own' ? sv : null)); }); }
-    const dist = X.lastDist || cam.refDist, px = dist * 2 * Math.tan(20 * DEG) / (vh * dpr), Y = (X.P && X.P.look && X.P.look.styled) || {};
+    const dist = X.lastDist || cam.dist || cam.refDist, px = dist * 2 * Math.tan(20 * DEG) / (vh * dpr), Y = (X.P && X.P.look && X.P.look.styled) || {};   // px: a pixel in world units where the camera really is, so lines stay one pixel at any zoom or lens
     // as Specimen draws them (cores 1, the Shape tab's shapes, dark 0, lit 1, lines in each look's own colour); styled: white lines, lighter
     const R = X.bodies === 'styled' ? { lineColor: [1, 1, 1], lineAlpha: Y.lineAlpha ?? 0.3 } : {}, shapes = window.CreatureShapes && Object.keys(window.CreatureShapes).length ? { shape: window.CreatureShapes } : undefined;
     ER.drawInto(ECO, { sim, time: t, vp: cam.vp, eye: cam.eye, refDist: cam.refDist, shift: cam.shift, shiftX: cam.shiftX, dpr, px, lineW: px * dpr * 0.5,
@@ -183,13 +188,13 @@
       for (const p of tw.built.parts) { const P = p.positions; if (!P) continue; for (let i = 0; i < P.length; i += 3) { if (P[i + 1] > top) top = P[i + 1]; if (P[i + 1] < 0.08 * (top || 1)) foot = Math.max(foot, Math.hypot(P[i], P[i + 2])); } }
       return { parts: tw.built.parts, model: m, top: top * s, foot: [m[12], m[13], foot * s * 1.1] }; }); }
   X.replant = function () { if (!window.PlaceFlora) return; const P = X.P, F = P && P.flora; if (!F) { PlaceFlora.clear(); return; }
-    const st = P.setting || {}, TD = tankDepth();
-    X.R.flora = PlaceFlora.plant(F, { gl, TW: tankW(), TH: tankH(), TD, U: worldUnit(), C: X.R.c, seed: 7, surfZ: ((st.surface && st.surface.level) ?? 0) * TD,
+    const st = P.setting || {}, TD = groundZ();   // the plants stand on the ground (under the city's edge when it stands)
+    X.R.flora = PlaceFlora.plant(F, { gl, TW: tankW(), TH: tankH(), TD, U: worldUnit(), C: X.R.c, seed: 7, surfZ: ((st.surface && st.surface.level) ?? 0) * tankDepth(),
       towers: st.city ? towerInfo() : [], city: st.city ? { r: CITY_FOOTPRINT_FRAC * tankW() * 0.9 } : null }); };
   X.plants = function (t) { if (!X.P || !X.P.flora || !window.PlaceFlora || !PlaceFlora.count) return;
     const total = X.total() || 30, u = ((X.shotT % total) + total) % total / total, grow = PlaceFlora.timelapse ? ease(clamp((u - 0.02) / 0.85, 0, 1)) * 16 : undefined;
     const Fl = W() || {}, sky = Fl.fog ? hex(Fl.fog) : [0, 0, 0], v = [X.R.c[0] - cam.eye[0], X.R.c[1] - cam.eye[1]], vl = Math.hypot(v[0], v[1]) || 1;
-    PlaceFlora.draw(gl, { vp: cam.vp, eye: cam.eye, shift: cam.shift, shiftX: cam.shiftX, time: t, grow, fz: tankDepth(), view: [v[0] / vl, v[1] / vl], sky, ink: X.P.flora.ink ? hex(X.P.flora.ink) : undefined });
+    PlaceFlora.draw(gl, { vp: cam.vp, eye: cam.eye, shift: cam.shift, shiftX: cam.shiftX, time: t, grow, fz: groundZ(), view: [v[0] / vl, v[1] / vl], sky, ink: X.P.flora.ink ? hex(X.P.flora.ink) : undefined });
     gl.bindVertexArray(null); gl.useProgram(null); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.disable(gl.CULL_FACE); };
 
   // ------------------------------------------------------------------ for a recorder: step by hand
@@ -201,6 +206,7 @@
   // ------------------------------------------------------------------ start
   window.ENVX = X;
   X.places = allPlaces();
+  X.groundZ = groundZ;
   X.lib = { clamp, lerp, hex, toHex, clone, LAYERS, LAYER_NAMES, ROLE_NAMES, SHOT_NAMES, STORE, saved, keep, applyCast, applySetting, buildPaths, centerOf, layerOf, live, rowLists, specName, get ECO() { return ECO; } };   // for the Places tab (places/ui.js)
   const q = new URLSearchParams(location.search);
   if (['specimen', 'styled', 'flat'].includes(q.get('bodies'))) X.bodyOverride = q.get('bodies');

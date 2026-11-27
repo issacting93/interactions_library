@@ -59,7 +59,7 @@
     grp.querySelector('#pl-reset').onclick = () => { if (X.id !== 'world') X.reset(); };
   }
   ui.say = (m) => { const s = document.getElementById('pl-status'); if (s) { s.textContent = m; clearTimeout(ui._t); ui._t = setTimeout(() => ui.status(), 2200); } };
-  ui.status = () => { const s = document.getElementById('pl-status'); if (!s) return; if (!X.P) { s.innerHTML = ''; s.appendChild(el('span', {}, 'World: the city and open water. Pick a place to edit it. Creatures ')); s.appendChild(seg('pl-wbodies', [['specimen', '3D'], ['flat', 'Lines']], X.worldBodies, (v) => { X.worldBodies = X.bodies = v; eco() && (eco()._looksFor = null); })); return; }
+  ui.status = () => { const s = document.getElementById('pl-status'); if (!s) return; if (!X.P) { s.textContent = 'World: the city and open water. Pick a place to edit it. (How the creatures are drawn: Draw, in the drawer.)'; return; }
     s.textContent = `${X.P.note || ''}${X.edited(X.id) ? ' (edited)' : ''}`; };
   function cards() { const box = document.getElementById('pl-cards'); box.innerHTML = '';
     for (const [id, P] of Object.entries(X.places)) { const b = el('button', { type: 'button', class: 'pl-card', 'aria-pressed': String(id === X.id) },

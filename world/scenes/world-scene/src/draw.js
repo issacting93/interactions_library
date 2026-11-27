@@ -94,7 +94,8 @@ function draw(t) {
     }
   };
   const solidEnv = !!(window.ENVX && ENVX.solid());   // a set piece in Solid: the shared renderer draws the creatures (ENVX.creatures, below), not these passes
-  const showSigil = S.mode !== 'cloud' && !solidEnv, showCloud = S.mode !== 'sigil' && !solidEnv;
+  // Draw: 3D (the shared renderer, ENVX.creatures; a place whose look is Lines falls back to the sigil), Sigil, Both or Cloud (this page's own line drawing)
+  const showSigil = S.mode !== 'cloud' && !solidEnv, showCloud = (S.mode === 'both' || S.mode === 'cloud') && !solidEnv;
   const common = (prog, lineW, layer) => {
     gl.useProgram(prog.p);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, spineTex); gl.uniform1i(prog.u.uSpine, 1);

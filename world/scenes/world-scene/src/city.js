@@ -63,8 +63,9 @@ const RESERVE_ATTEMPTS = 6;
 // never enough space to guarantee the WFC's own neighbouring buildings (built flush to whatever
 // it WASN'T told to reserve) don't visually overlap it.
 const MAX_TOWER_CELLS = 3;
+let cityBuiltTD = 0;   // the tank depth the city was last built for (it stands at 0.92 of it): cityFollowDepth() builds it again when that changes
 function buildPlacedCity(seed, ringCount) {
-  ringCount = ringCount == null ? 3 : ringCount;
+  ringCount = ringCount == null ? 3 : ringCount; cityBuiltTD = tankDepth();
   const tiles = CityWFC.buildTiles();
   const belvedereIdx = tiles.findIndex(tl => tl.id === 'belvedere');
   const ringCells = CityWFC.buildGrid().cells.filter(c => c.ring === LANDMARK_RING);
