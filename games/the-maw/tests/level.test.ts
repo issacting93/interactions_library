@@ -190,8 +190,8 @@ describe("exits", () => {
 });
 
 describe("creatures and the Maw (version 4)", () => {
-  it("a version 3 file comes forward unchanged, and every preset is a pattern as the field plays it", () => {
-    const v3 = Object.assign(L.template("field"), { version: 3 }); const up = L.migrate(JSON.parse(JSON.stringify(v3))); expect(up.version).toBe(4); expect(up.entities).toEqual(v3.entities);
+  it("a version 3 file comes forward to the current version, and every preset is a pattern as the field plays it", () => {
+    const v3 = Object.assign(L.template("field"), { version: 3 }); const up = L.migrate(JSON.parse(JSON.stringify(v3))); expect(up.version).toBe(L.VERSION); expect(up.entities).toEqual(v3.entities);
     expect(Object.keys(L.PRESETS).sort()).toEqual(L.ENCOUNTERS.map((e: any) => e.id).sort()); expect(L.PRESETS.territory).toMatchObject({ from: "dragon", hp: 5 }); expect(L.PRESETS.charge.hp).toBe(3);
   });
   it("a creature made from a preset can be placed, checked and written, and a bad one is caught", () => {
@@ -206,5 +206,28 @@ describe("creatures and the Maw (version 4)", () => {
     const lv = L.template("field"); lv.maw = { body: "serpent", legs: "raptor", kit: { eyes: 2, abil: ["spit"] } }; expect(L.validate(lv).errors).toEqual([]);
     lv.maw = { body: "blob", legs: "raptor", kit: { eyes: 3, abil: ["fly"] } }; expect(L.validate(lv).errors.length).toBe(3);
     const t = L.stringify(L.template("field")); expect(t).not.toMatch(/"creature": ""/); expect(t).not.toMatch(/"creatures"/);
+  });
+});
+
+describe("the goal (version 5)", () => {
+  const field = () => { const l = L.template("field"); return l; };
+  const ok = (l: any) => L.validate(l, { species: L.AMBIENT.map((a: any) => a[0]) });
+  it("a new level has no goal, and an older file comes forward with exits that open on the goal", () => {
+    expect(L.create().goal.type).toBe("none");
+    const old: any = L.create(); old.version = 4; delete old.goal; old.entities.push({ id: "e2", type: "exit", x: 10, y: 0, to: "next", r: 5 });
+    const up = L.migrate(JSON.parse(JSON.stringify(old))); expect(up.goal.type).toBe("none"); expect(up.entities.find((e: any) => e.type === "exit").opens).toBe("goal");
+  });
+  it("each kind of goal is checked", () => {
+    const l: any = field(); l.goal = { type: "eat", n: 5, species: "", target: "all", secs: 60 }; expect(ok(l).ok).toBe(true);
+    l.goal.n = 0; expect(ok(l).errors.some((e: any) => /Eat/.test(e.msg))).toBe(true);
+    l.goal = { type: "kill", n: 1, species: "", target: "e999", secs: 60 }; expect(ok(l).errors.some((e: any) => /Defeat/.test(e.msg))).toBe(true);
+    l.goal.target = "all"; expect(ok(l).ok).toBe(true);
+    l.goal = { type: "reach", n: 1, species: "", target: "all", secs: 60 }; expect(ok(l).errors.some((e: any) => /beacon/.test(e.msg))).toBe(true);
+    l.entities.push(L.entity ? L.entity("beacon", 30, 30) : { id: "b1", type: "beacon", x: 30, y: 30, r: 6 }); l.entities[l.entities.length - 1].id = "b1"; expect(ok(l).ok).toBe(true);
+    l.goal = { type: "survive", n: 1, species: "", target: "all", secs: 2 }; expect(ok(l).errors.some((e: any) => /Survive/.test(e.msg))).toBe(true);
+    l.goal.secs = 90; expect(ok(l).ok).toBe(true);
+  });
+  it("says the goal in a line", () => {
+    expect(L.goalText({ type: "eat", n: 8, species: "koi" })).toBe("Eat 8 Sigil Koi"); expect(L.goalText({ type: "survive", secs: 45 })).toBe("Survive 45 s"); expect(L.goalText({ type: "none" })).toBe("");
   });
 });

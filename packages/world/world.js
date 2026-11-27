@@ -59,7 +59,7 @@
   function canGo(world, save, to) { if (save.at === null) return to === world.start; const k = exits(world, save.at).find((x) => x.to === to); return !!k && (!k.needs || !!flagsOf(save)[k.needs]); }
   function awayFor(world, save, id) { const lv = byId(world, id), r = save.levels[id]; if (!lv || !r || r.leftAt === null || lv.away !== "live") return 0; return Math.max(0, +(save.clock - r.leftAt).toFixed(3)); }
   // enter a level: says what to build. The game makes the level from { level, seed }, applies changes, then plays `away` seconds forward
-  function enter(world, save, id) { if (!byId(world, id)) throw new Error("No level " + id); if (!canGo(world, save, id)) throw new Error("No way from " + save.at + " to " + id);
+  function enter(world, save, id, o) { if (!byId(world, id)) throw new Error("No level " + id); if (!(o && o.anyway) && !canGo(world, save, id)) throw new Error("No way from " + save.at + " to " + id);
     const r = rec(save, id), away = awayFor(world, save, id); r.visits++; r.leftAt = null; r.catchUp = away; save.at = id; if (!save.lasting.seen.includes(id)) save.lasting.seen.push(id);
     return { id, level: byId(world, id).level, seed: seedOf(world, id), changes: clone(r.changes), state: clone(r.state), away, first: r.visits === 1 }; }
   // the page was loaded again while you were in a level: the same descriptor, and nothing counted twice
@@ -71,6 +71,11 @@
     if (o.made && o.now) r.changes = diff(o.made, o.now); else if (o.changes) r.changes = clone(o.changes); if (o.state) r.state = clone(o.state); r.leftAt = save.clock; save.at = null; return r; }
   // walk through a link: leave where you stand (keeping what differs) and enter the next. Refused before anything is changed
   function go(world, save, to, o) { if (!canGo(world, save, to)) throw new Error("No way from " + save.at + " to " + to); if (save.at !== null) { const from = save.at; leave(world, save, o); save.at = from; } return enter(world, save, to); }
+  // the level select: go to a level the run has already been to (or the start), links or not. Leaves where you stand, keeping what differs
+  function jump(world, save, to, o) { if (!byId(world, to)) throw new Error("No level " + to); if (to !== world.start && !save.lasting.seen.includes(to)) throw new Error(to + " has not been reached yet");
+    const from = save.at; if (from !== null) leave(world, save, o); return enter(world, save, to, { anyway: true }); }
+  // what a level's clearing is called: set by the field when its goal is met (a link can need it: needs: "cleared-<id>")
+  const clearedFlag = (id) => "cleared-" + id;
   // a level's exits against the world's links: an exit to nowhere is an error; an exit with no link, or a link with no exit, is a warning
   function checkExits(world, id, level) { const errors = [], warnings = [], ex = (level.entities || []).filter((e) => e.type === "exit"), to = new Set(exits(world, id).map((k) => k.to));
     for (const e of ex) { if (!byId(world, e.to)) errors.push({ message: "This exit leads to " + e.to + ", which the world does not have.", id: e.id }); else if (!to.has(e.to)) warnings.push({ message: "No link from " + id + " to " + e.to + ": this exit will stay shut.", id: e.id }); }
@@ -111,6 +116,6 @@
   function parse(text) { let o; try { o = typeof text === "string" ? JSON.parse(text) : clone(text); } catch (e) { throw new Error("Not JSON: " + e.message); }
     if (!isObj(o) || (o.format !== WORLD && o.format !== SAVE)) throw new Error("Not a world or a save."); if (o.version > VERSION) throw new Error("Made by a newer build (version " + o.version + ")."); return o; }
 
-  const api = { WORLD, SAVE, VERSION, AWAY, DEATH, create, addLevel, link, byId, exits, reach, seedOf, validateWorld, newSave, tick, canGo, awayFor, enter, resume, settle, leave, go, checkExits, setFlag, flagsOf, die, diff, levelFor, validateSave, stringify, parse };
+  const api = { WORLD, SAVE, VERSION, AWAY, DEATH, create, addLevel, link, byId, exits, reach, seedOf, validateWorld, newSave, tick, canGo, awayFor, enter, resume, settle, leave, go, jump, clearedFlag, checkExits, setFlag, flagsOf, die, diff, levelFor, validateSave, stringify, parse };
   root.ForgeWorld = api; if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

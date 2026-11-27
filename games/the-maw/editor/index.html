@@ -195,12 +195,13 @@ function draw() { dirty = false; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRe
   g.font = "400 9px 'IBM Plex Mono', monospace"; g.textBaseline = 'middle';
   // a Hanging Drop's line to its tower
   g.setLineDash([3, 4]); g.strokeStyle = C.l5; for (const e of lv.entities) if (e.type === 'encounter' && L.ENC[e.pattern] && L.ENC[e.pattern].needs === 'tower') { const t = L.byId(lv, e.tower) || L.nearestTower(lv, e); if (t) { g.beginPath(); g.moveTo(sx(e.x), sy(e.y)); g.lineTo(sx(t.x), sy(t.y)); g.stroke(); } } g.setLineDash([]);
-  const X = L.expand(lv), ownerOf = (e) => e.from || e.id, order = ['grove', 'wall', 'landmark', 'exit', 'tower', 'encounter', 'start'];
+  const X = L.expand(lv), ownerOf = (e) => e.from || e.id, order = ['grove', 'wall', 'landmark', 'beacon', 'exit', 'tower', 'encounter', 'start'];
   for (const type of order) for (const e of X.entities) { if (e.type !== type) continue; const x = sx(e.x), y = sy(e.y), r = L.radiusOf(e) * view.k, on = multi.has(ownerOf(e)), col = bad.has(ownerOf(e)) ? C.rec : on ? C.acc : C.ink;
     g.strokeStyle = col; g.fillStyle = col; g.lineWidth = on ? 1.5 : 1;
     if (type === 'grove') { g.setLineDash([2, 4]); g.beginPath(); g.arc(x, y, r, 0, TAU); g.stroke(); g.setLineDash([]); for (let i = 0; i < Math.min(12, e.plants); i++) { const a = i * 2.4, d = r * (0.25 + 0.6 * ((i * 37) % 10) / 10); g.beginPath(); g.moveTo(x + Math.cos(a) * d, y + Math.sin(a) * d + 3); g.lineTo(x + Math.cos(a) * d, y + Math.sin(a) * d - 3); g.stroke(); } }
     else if (type === 'wall') { const [x0, y0, x1, y1] = wallEnds(e); g.lineWidth = on ? 4 : 3; g.beginPath(); g.moveTo(sx(x0), sy(y0)); g.lineTo(sx(x1), sy(y1)); g.stroke(); g.lineWidth = 1; }
     else if (type === 'landmark') { g.fillStyle = C.ground; g.fillRect(Math.round(x) - 4.5, Math.round(y) - 4.5, 9, 9); g.strokeRect(Math.round(x) - 4.5, Math.round(y) - 4.5, 9, 9); g.fillStyle = on ? col : C.ink2; if (view.k > 2.2 || on) g.fillText(String(e.kind || '').toUpperCase(), x + 10, y); }
+    else if (type === 'beacon') { g.beginPath(); g.arc(x, y, Math.max(5, r), 0, TAU); g.stroke(); g.beginPath(); g.arc(x, y, Math.max(2.5, r * 0.5), 0, TAU); g.stroke(); g.beginPath(); g.arc(x, y, 1.6, 0, TAU); g.fill(); g.fillStyle = on || bad.has(ownerOf(e)) ? col : C.ink2; if (view.k > 1.6 || on) g.fillText('BEACON', x + Math.max(8, r) + 4, y); }
     else if (type === 'exit') { g.setLineDash([3, 3]); g.beginPath(); g.arc(x, y, Math.max(5, r), 0, TAU); g.stroke(); g.setLineDash([]); g.beginPath(); g.arc(x, y, Math.max(2.5, r * 0.55), 0, TAU); g.stroke(); g.fillStyle = on || bad.has(ownerOf(e)) ? col : C.ink2; if (view.k > 1.6 || on) g.fillText('EXIT → ' + String(e.to || '?').toUpperCase(), x + Math.max(8, r) + 4, y); }
     else if (type === 'tower') { g.fillStyle = C.ground; g.beginPath(); g.arc(x, y, Math.max(3, r), 0, TAU); g.fill(); g.stroke(); g.beginPath(); g.arc(x, y, Math.max(1.5, r * 0.55), 0, TAU); g.stroke(); g.fillStyle = col; }
     else if (type === 'encounter') { const s = 6; g.fillStyle = C.ground; g.beginPath(); g.moveTo(x, y - s); g.lineTo(x + s, y); g.lineTo(x, y + s); g.lineTo(x - s, y); g.closePath(); g.fill(); g.stroke(); g.fillStyle = on || bad.has(ownerOf(e)) ? col : C.ink2;
@@ -286,7 +287,7 @@ addEventListener('blur', () => { if (spaceHeld) { spaceHeld = false; setCursor()
 
 // ---- adding ----
 function setPlacing(e) { placing = e; document.body.classList.toggle('placing', !!e); if (e && tool !== 'select') setTool('select'); status(); setCursor(); for (const b of document.querySelectorAll('[data-add]')) b.setAttribute('aria-pressed', String(!!e && b.dataset.add === e.type)); dirty = true; }
-{ const eb = el('button', { type: 'button', text: '+ Exit' }); eb.dataset.add = 'exit'; document.querySelector('[data-add=landmark]').after(eb); }   // a way out to another level of a world: fields only
+{ const eb = el('button', { type: 'button', text: '+ Exit' }); eb.dataset.add = 'exit'; document.querySelector('[data-add=landmark]').after(eb); const bb = el('button', { type: 'button', text: '+ Beacon' }); bb.dataset.add = 'beacon'; eb.after(bb); }   // where a Reach goal is met: fields only   // a way out to another level of a world: fields only
 for (const b of document.querySelectorAll('[data-add]')) b.onclick = () => { const type = b.dataset.add; if (placing && placing.type === type) return setPlacing(null);
   setPlacing(L.entity(type, 0, 0, type === 'encounter' ? patValue() : type === 'prefab' ? { prefab: $('pf').value } : type === 'tower' && isStage() ? { r: 7, height: 0.6 } : null)); };   // the tank's towers are wider and lower than the field's
 // the prefab library: prefabs kept on this device (localStorage "forge-prefabs"), to place in any level. One placed from it is copied into the level, which then
@@ -298,7 +299,7 @@ function placeAt(x, y) { const e = Object.assign({}, placing, { x, y }), cmds = 
   setPlacing(again); }   // a place tool stays armed (Esc or V ends it), so ten towers are T and ten clicks; one-of-a-kind things place once
 let multiOn = false; $('multi').onclick = () => { multiOn = !multiOn; $('multi').setAttribute('aria-pressed', String(multiOn)); status(); };
 function drawBar() { patFill(); const P = level().prefabs || {}, lib = libGet(), keys = Object.keys(P), more = Object.keys(lib).filter((k) => !P[k]), pf = $('pf'), was = pf.value; pf.textContent = ''; for (const k of keys) pf.append(el('option', { value: k, text: P[k].name })); for (const k of more) pf.append(el('option', { value: k, text: lib[k].name + ' · library' })); if (keys.concat(more).includes(was)) pf.value = was; $('pf-grp').hidden = !(keys.length + more.length);
-  document.querySelector('[data-add=start]').disabled = L.ofType(level(), 'start').length > 0; document.querySelector('[data-add=exit]').hidden = isStage(); }
+  document.querySelector('[data-add=start]').disabled = L.ofType(level(), 'start').length > 0; document.querySelector('[data-add=exit]').hidden = isStage(); document.querySelector('[data-add=beacon]').hidden = isStage(); }
 $('pf').onchange = () => { if (placing && placing.type === 'prefab') placing.prefab = $('pf').value; };
 // the Add bar's encounter list: the 21 patterns, then this level's own creatures (value c:<key>), rebuilt as the level's creatures change
 function patValue() { const v = $('pat').value, c = v.startsWith('c:') && (level().creatures || {})[v.slice(2)]; return c ? { pattern: c.pattern, creature: v.slice(2) } : { pattern: v }; }
@@ -315,7 +316,7 @@ function unpack() { const cmd = sel && L.unpackPrefab(level(), sel); if (cmd) { 
 function drawRows() { const box = $('rows'), lv = level(), bad = new Set(checks.errors.map((e) => e.id)); box.textContent = ''; $('count').textContent = isStage() ? Object.keys((lv.stage || {}).roster || {}).length : lv.entities.length;
   if (isStage()) { box.append(el('div', { class: 'sect micro', text: 'Roster' })); for (const [k, n] of Object.entries((lv.stage || {}).roster || {})) box.append(el('button', { type: 'button', class: 'row', on: { click: () => setPane('stage') } }, [el('span', { class: 'mk', text: 'S' }), el('span', { class: 'nm', text: SPN[k] || k }), el('span', { class: 'xy', text: '× ' + n })]));
   }
-  for (const type of ['start', 'tower', 'wall', 'landmark', 'grove', 'exit', 'encounter', 'prefab']) { const list = L.ofType(lv, type); if (!list.length) continue; if (type !== 'start') box.append(el('div', { class: 'sect micro', text: L.TYPES[type].label + 's · ' + list.length }));
+  for (const type of ['start', 'tower', 'wall', 'landmark', 'grove', 'beacon', 'exit', 'encounter', 'prefab']) { const list = L.ofType(lv, type); if (!list.length) continue; if (type !== 'start') box.append(el('div', { class: 'sect micro', text: L.TYPES[type].label + 's · ' + list.length }));
     for (const e of list) box.append(el('button', { type: 'button', class: 'row' + (bad.has(e.id) ? ' bad' : ''), 'aria-pressed': String(multi.has(e.id)), 'data-id': e.id, on: { click: (ev) => { select(e.id, true, ev.shiftKey || ev.ctrlKey || ev.metaKey || multiOn); center(e); } } },
       [el('span', { class: 'mk', text: L.TYPES[type].mark }), el('span', { class: 'nm', text: nameOf(e) }), el('span', { class: 'xy', text: f1(e.x) + ', ' + f1(e.y) })])); } }
 function center(e) { if (Math.abs(sx(e.x) - W / 2) > W * 0.45 || Math.abs(sy(e.y) - H / 2) > H * 0.45) { view.x = e.x; view.y = e.y; dirty = true; } }
@@ -365,6 +366,14 @@ function drawPane() { const box = $('pane'), lv = level(); box.textContent = '';
     box.append(el('h3', { text: 'Level' }), field('Name', name), el('div', { class: 'f' }, [el('label', { for: 'f-seed', text: 'Seed' }), el('div', { class: 'v' }, [Object.assign(seed, { id: 'f-seed' }), roll])]), el('div', { class: 'f' }, [el('label', { text: 'Field size' }), el('div', { class: 'v' }, [size])]),
       el('p', { class: 'note', text: 'Field size is how much ground there is. The layout keeps its shape; a bigger field spreads it over more ground.' }), el('div', { class: 'hr' }), el('h3', { text: 'Food kept in the field' }));
     lv.life.ambient.forEach((a, i) => box.append(field((L.AMBIENT.find((x) => x[0] === a.species) || [0, a.species])[1], num(a.count, { min: 0, max: 200, step: 1 }, (n) => { const next = lv.life.ambient.map((x) => Object.assign({}, x)); next[i].count = Math.round(n); set('life.ambient', next); }))));
+
+    // the goal: what clears the level. Exits set to open on it stay shut until it is met (World tab links can also need the flag cleared-<level id>)
+    { const g = Object.assign(L.goalDefault(), lv.goal || {}), setG = (k, v) => set('goal', Object.assign({}, g, { [k]: v })), encs = L.ofType(lv, 'encounter');
+      box.append(el('div', { class: 'hr' }), el('h3', { text: 'Goal' }), field('Goal', pick(g.type, L.GOALS, (v) => setG('type', v))));
+      if (g.type === 'eat') { box.append(field('How many', num(g.n, { min: L.GOAL_RANGE.n[0], max: L.GOAL_RANGE.n[1], step: 1 }, (n) => setG('n', Math.round(n)))), field('Of', pick(g.species || '', [['', 'Anything']].concat(L.AMBIENT), (v) => setG('species', v)))); }
+      if (g.type === 'kill') box.append(field('Defeat', pick(g.target || 'all', [['all', 'Every encounter']].concat(encs.map((e) => [e.id, nameOf(e) + ' · ' + e.id])), (v) => setG('target', v))));
+      if (g.type === 'survive') box.append(field('For', num(g.secs, { min: L.GOAL_RANGE.secs[0], max: L.GOAL_RANGE.secs[1], step: 5 }, (n) => setG('secs', Math.round(n))), 's'));
+      box.append(el('p', { class: 'note', text: g.type === 'none' ? 'No goal: the level is never cleared, and every exit is open.' : g.type === 'reach' ? 'Place a Beacon (B). The level is cleared when the Maw walks into it.' : 'The player sees: ' + L.goalText(g, lv) + '. Meeting it opens exits set to open on the goal, and sets the world flag cleared-<level id>.' })); }
     const notes = el('textarea', { 'aria-label': 'Notes' }); notes.value = lv.notes || ''; notes.addEventListener('change', () => set('notes', notes.value));
     box.append(el('div', { class: 'hr' }), el('h3', { text: 'Fill by rule' }), el('p', { class: 'note', text: 'Adds groves and one of every pattern in the field\'s usual numbers, spaced out from the seed. One undo takes it back.' }),
       el('button', { type: 'button', text: '+ Field roster', on: { click: () => { const tmp = JSON.parse(JSON.stringify(lv)), added = L.autoPlace(tmp, { groves: 5, encounters: L.FIELD_ROSTER }); edit({ op: 'batch', label: 'fill', cmds: added.map((e) => ({ op: 'add', entity: e })) }); } } }),
@@ -778,7 +787,7 @@ const A = (o) => KM.add(o);
 A({ id: 'tool.select', keys: ['v'], label: 'Select', group: 'Tools', run: () => { setPlacing(null); setTool('select'); } });
 A({ id: 'tool.hand', keys: ['h'], label: 'Hand (pan)', group: 'Tools', run: () => setTool(tool === 'hand' ? 'select' : 'hand') });
 A({ id: 'tool.space', keys: [], note: 'hold Space', label: 'Pan while held', group: 'Tools', run() {}, noPalette: true });
-for (const [type, k, label] of [['tower', 't', 'Place a tower'], ['grove', 'g', 'Place a grove'], ['wall', 'w', 'Place a wall'], ['landmark', 'l', 'Place a landmark'], ['exit', 'x', 'Place an exit'], ['encounter', 'e', 'Place an encounter'], ['start', 'm', 'Place the Maw\'s start']])
+for (const [type, k, label] of [['tower', 't', 'Place a tower'], ['grove', 'g', 'Place a grove'], ['wall', 'w', 'Place a wall'], ['landmark', 'l', 'Place a landmark'], ['exit', 'x', 'Place an exit'], ['beacon', 'b', 'Place a beacon'], ['encounter', 'e', 'Place an encounter'], ['start', 'm', 'Place the Maw\'s start']])
   A({ id: 'add.' + type, keys: [k], label, group: 'Tools', when: mapOn, run: () => addTool(type) });
 A({ id: 'undo', keys: ['mod+z'], label: 'Undo', group: 'Edit', run: () => { if (L.undo(D)) changed(); } });
 A({ id: 'redo', keys: ['mod+shift+z', 'mod+y'], label: 'Redo', group: 'Edit', run: () => { if (L.redo(D)) changed(); } });

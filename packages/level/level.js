@@ -10,7 +10,7 @@
 // A classic script (window.ForgeLevel) that Node can also load (module.exports). No DOM, no dependencies.
 (function (root) {
   "use strict";
-  const FORMAT = "forge-level", VERSION = 4, TAU = Math.PI * 2;
+  const FORMAT = "forge-level", VERSION = 5, TAU = Math.PI * 2;
   const getPath = (o, path) => path.split(".").reduce((a, k) => (a == null ? a : a[k]), o);
 
   // ---- what a level can hold ----
@@ -59,12 +59,27 @@
     // a way out to another level of a world (packages/world): walk the Maw into it. `to` is the id of a level in the world, not a file name
     exit: { label: "Exit", mark: "X", radius: (e) => e.r || 5, props: [
       { key: "to", label: "Leads to", kind: "text", def: "", hint: "a level id in the world" },
-      { key: "r", label: "Radius", kind: "number", min: 3, max: 12, step: 0.5, def: 5 } ] },
+      { key: "r", label: "Radius", kind: "number", min: 3, max: 12, step: 0.5, def: 5 },
+      { key: "opens", label: "Opens", kind: "enum", options: [["goal", "When the goal is met"], ["always", "Always"]], def: "goal" } ] },
+    // where a "reach" goal is met: the Maw walking into the ring clears the level (fields)
+    beacon: { label: "Beacon", mark: "B", radius: (e) => e.r || 6, props: [
+      { key: "r", label: "Radius", kind: "number", min: 3, max: 15, step: 0.5, def: 6 } ] },
     encounter: { label: "Encounter", mark: "E", radius: () => 3, props: [
       { key: "pattern", label: "Pattern", kind: "enum", options: ENCOUNTERS.map((e) => [e.id, e.name]), def: "charge" },
       { key: "tower", label: "Tower", kind: "ref", of: "tower", def: "", hint: "empty: the nearest" },
       { key: "creature", label: "Creature", kind: "creature", def: "", hint: "empty: the pattern's own" } ] },
   };
+
+  // ---- the goal (version 5): what clears a field level. Exits that open "when the goal is met" stay shut until it is ----
+  // eat: n meals (species: "" for any); kill: the encounter named by target, or "all" of them; reach: walk into a beacon; survive: secs seconds
+  const GOALS = [["none", "No goal"], ["eat", "Eat"], ["kill", "Defeat"], ["reach", "Reach a beacon"], ["survive", "Survive"]];
+  const GOAL_RANGE = { n: [1, 200], secs: [5, 1800] };
+  const goalDefault = () => ({ type: "none", n: 10, species: "", target: "all", secs: 60 });
+  // one line the player reads: "Eat 10", "Defeat every encounter", "Survive 60 s"
+  function goalText(g, level) { g = g || {}; const nm = (k) => ((AMBIENT.find((a) => a[0] === k) || [0, k])[1]);
+    if (g.type === "eat") return "Eat " + g.n + (g.species ? " " + nm(g.species) : "");
+    if (g.type === "kill") { if (g.target && g.target !== "all") { const e = level && (level.entities || []).find((x) => x.id === g.target); const p = e && ENC[e.pattern]; return "Defeat " + (p ? p.name : "the marked encounter"); } return "Defeat every encounter"; }
+    if (g.type === "reach") return "Reach the beacon"; if (g.type === "survive") return "Survive " + g.secs + " s"; return ""; }
 
   // ---- creatures (version 4) ----
   // level.creatures is { key: { name, pattern, from, size, hp, dmg, speed } }: a creature of this level's own, played by an encounter that names it.
@@ -155,6 +170,7 @@
   function create(o) { o = o || {};
     return { format: FORMAT, version: VERSION, kind: "field", name: o.name || "Untitled", notes: "", seed: o.seed == null ? 7 : o.seed | 0,
       field: { shape: "disc", radius: 100, crowd: o.crowd || 70 },
+      goal: goalDefault(),
       life: { ambient: [["koi", 7], ["worm", 4], ["wisp", 6], ["leech", 4], ["comb-drifter", 3]].map(([species, count]) => ({ species, count })) },
       entities: [Object.assign(entity("start", 0, 0), { id: "e1" })] }; }
 
@@ -189,7 +205,8 @@
 
   // ---- files ----
   // older versions are brought forward one step at a time; MIGRATIONS[n] turns version n into n + 1
-  const MIGRATIONS = { 1: (L) => { L.kind = "field"; return L; }, 2: (L) => L, 3: (L) => L };   // version 4 added a level's own creatures and the Maw's body and kit: nothing in an older file changes   // version 3 added walls, landmarks, prefabs and a stage's Maw start: nothing in an older file changes   // version 2 added kind and the stage block; every version 1 level was a field
+  const MIGRATIONS = { 1: (L) => { L.kind = "field"; return L; }, 2: (L) => L, 3: (L) => L, 4: (L) => { if (L.kind === "field") { L.goal = L.goal || goalDefault(); for (const e of L.entities || []) if (e.type === "exit" && !e.opens) e.opens = "goal"; } return L; } };   // version 5 added the goal, the beacon and an exit's Opens: a goal of none leaves every exit as it was
+  // version 4 added a level's own creatures and the Maw's body and kit: nothing in an older file changes   // version 3 added walls, landmarks, prefabs and a stage's Maw start: nothing in an older file changes   // version 2 added kind and the stage block; every version 1 level was a field
   function migrate(obj) { if (!obj || typeof obj !== "object" || obj.format !== FORMAT) throw new Error("not a Forge level file");
     let L = clone(obj); if (!(L.version >= 1)) throw new Error("level has no version");
     if (L.version > VERSION) throw new Error("level is version " + L.version + "; this build reads up to " + VERSION);
@@ -198,7 +215,7 @@
   function parse(text) { let obj; try { obj = JSON.parse(text); } catch (e) { throw new Error("not JSON: " + e.message); } return migrate(obj); }
   // keys in one order and numbers rounded, so the same level always gives the same file
   function stringify(level) { const L = clone(level); if (L.prefabs && !Object.keys(L.prefabs).length) delete L.prefabs; if (L.creatures && !Object.keys(L.creatures).length) delete L.creatures; for (const e of L.entities || []) if (e.type === "encounter" && !e.creature) delete e.creature; /* an encounter played by its pattern's own creature says nothing */ for (const e of L.entities) for (const k of Object.keys(e)) if (typeof e[k] === "number") e[k] = round(e[k], 3);
-    const head = ["format", "version", "kind", "name", "notes", "seed", "field", "life", "stage", "maw", "creatures", "prefabs", "entities"], out = {};
+    const head = ["format", "version", "kind", "name", "notes", "seed", "field", "life", "goal", "stage", "maw", "creatures", "prefabs", "entities"], out = {};
     for (const k of head) if (k in L) out[k] = L[k]; for (const k of Object.keys(L)) if (!(k in out)) out[k] = L[k];
     out.entities = L.entities.map((e) => { const o = { id: e.id, type: e.type, x: e.x, y: e.y }; for (const k of Object.keys(e)) if (!(k in o)) o[k] = e[k]; return o; });
     return JSON.stringify(out, null, 2).replace(/\{\n\s+"id": ([^\n]+),\n\s+"type": ([^\n]+),\n([\s\S]*?)\n\s+\}/g, (m, id, type, rest) => `{ "id": ${id}, "type": ${type}, ${rest.trim().replace(/,\n\s+/g, ", ")} }`).replace(/\{\n\s+"species": ([^\n]+),\n\s+"count": ([^\n]+)\n\s+\}/g, '{ "species": $1, "count": $2 }') + "\n"; }
@@ -239,6 +256,7 @@
       return { ok: !errors.length, errors, warnings }; }
     const amb = (level.life && level.life.ambient) || []; if (!amb.length) W(null, "No food is kept in the field: everything will starve.");
     for (const a of amb) { if (ctx.species ? !ctx.species.includes(a.species) : !a.species) E(null, "Food names an unknown species: " + a.species + "."); if (!(a.count >= 0 && a.count <= 200)) E(null, "Food count for " + a.species + " must be 0 to 200."); }
+    goalChecks(level, ents, E, W);
     const seen = new Set(), towers = ents.filter((e) => e.type === "tower"), starts = ents.filter((e) => e.type === "start");
     if (starts.length !== 1) E(null, starts.length ? "More than one Maw start." : "No Maw start.");
     for (const e of ents) { const T = TYPES[e.type];
@@ -264,6 +282,16 @@
     if (!encs.length) W(null, "No encounters: nothing hunts the Maw.");
     if (encs.length > 60) W(null, encs.length + " encounters: the field draws at most 64 creatures at once.");
     return { ok: !errors.length, errors, warnings }; }
+
+  function goalChecks(level, ents, E, W) { const g = level.goal; if (!g || g.type === "none") { if (ents.some((e) => e.type === "beacon")) W(null, "A beacon is placed but the goal is not Reach a beacon: it does nothing."); return; }
+    if (!GOALS.some((x) => x[0] === g.type)) return E(null, "Unknown goal: " + g.type + ".");
+    const encs = ents.filter((e) => e.type === "encounter");
+    if (g.type === "eat") { if (!(g.n >= GOAL_RANGE.n[0] && g.n <= GOAL_RANGE.n[1])) E(null, "Eat: how many must be " + GOAL_RANGE.n[0] + " to " + GOAL_RANGE.n[1] + "."); if (g.species && !AMBIENT.some((a) => a[0] === g.species)) W(null, "Eat: " + g.species + " is not kept as food here, so it may never be eaten."); }
+    if (g.type === "kill") { if (!encs.length) E(null, "Defeat: the level has no encounters to defeat."); else if (g.target && g.target !== "all" && !encs.some((e) => e.id === g.target)) E(null, "Defeat: the encounter " + g.target + " is not in the level."); }
+    if (g.type === "reach") { if (!ents.some((e) => e.type === "beacon")) E(null, "Reach a beacon: the level has no beacon."); }
+    if (g.type === "survive" && !(g.secs >= GOAL_RANGE.secs[0] && g.secs <= GOAL_RANGE.secs[1])) E(null, "Survive: the time must be " + GOAL_RANGE.secs[0] + " to " + GOAL_RANGE.secs[1] + " seconds.");
+    if (g.type !== "reach" && ents.some((e) => e.type === "beacon")) W(null, "A beacon is placed but the goal is not Reach a beacon: it does nothing.");
+    if (!ents.some((e) => e.type === "exit" && e.opens !== "always")) W(null, "The goal has no exit to open: it ends the level but leads nowhere."); }
 
   function stageChecks(st, ctx, E, W) { if (!st || typeof st !== "object") return E(null, "A stage level has no stage settings.");
     const known = ctx.speciesAll ? new Set(ctx.speciesAll) : null, crew = new Set(CREW.map((c) => c[0])), props = new Set(PROPS.map((c) => c[0])), num = (v) => typeof v === "number" && Number.isFinite(v);
@@ -308,7 +336,7 @@
   function undo(d) { const s = d.undo.pop(); if (!s) return false; const inv = run(d.level, s.inv); d.redo.push({ inv, label: s.label }); d.changes++; return true; }
   function redo(d) { const s = d.redo.pop(); if (!s) return false; const inv = run(d.level, s.inv); d.undo.push({ inv, merge: null, label: s.label }); d.changes++; return true; }
 
-  const api = { PRESETS, CRE_RANGE, MAW, creatureFrom, creatureOf, FORMAT, VERSION, TYPES, ENCOUNTERS, ENC, AMBIENT, TEMPLATES, FIELD_ROSTER, STAGE, CREW, PROPS, stage, fromStage, toStage, layoutOf, expand, partsOf, makePrefab, unpackPrefab, slug, getPath, rng, snap, round, dist, radiusOf, byId, ofType, nextId, nearestTower,
+  const api = { GOALS, GOAL_RANGE, goalDefault, goalText, PRESETS, CRE_RANGE, MAW, creatureFrom, creatureOf, FORMAT, VERSION, TYPES, ENCOUNTERS, ENC, AMBIENT, TEMPLATES, FIELD_ROSTER, STAGE, CREW, PROPS, stage, fromStage, toStage, layoutOf, expand, partsOf, makePrefab, unpackPrefab, slug, getPath, rng, snap, round, dist, radiusOf, byId, ofType, nextId, nearestTower,
     entity, create, template, autoPlace, migrate, parse, stringify, validate, doc, apply, seal, undo, redo };
   root.ForgeLevel = api; if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

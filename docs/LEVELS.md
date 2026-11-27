@@ -32,11 +32,11 @@ The editor is laid out the way Unity's and Unreal's are, and each of their ideas
 | Editing in play mode | the game is live: a change to the level reaches the running game |
 | The 3D scene view | 3D (a field): the game's own view is the scene; press to pick, drag to move, tap to place |
 
-## The file (version 4)
+## The file (version 5)
 
 ```json
 {
-  "format": "forge-level", "version": 4, "kind": "field", "name": "One on one", "notes": "", "seed": 7,
+  "format": "forge-level", "version": 5, "kind": "field", "name": "One on one", "notes": "", "seed": 7,
   "field": { "shape": "disc", "radius": 100, "crowd": 70 },
   "life": { "ambient": [{ "species": "koi", "count": 7 }] },
   "entities": [
@@ -60,7 +60,8 @@ The editor is laid out the way Unity's and Unreal's are, and each of their ideas
 | `encounter` | `pattern` (one of the field's 21), `tower` (an id, or empty for the nearest) | Its place is the creature's home. A Hanging Drop goes to its tower |
 | `wall` | `len` 4 to 120, `turn` 0 to 179 degrees, `height` 0.05 to 0.5 | Tank stages only. x, y is its middle |
 | `landmark` | `kind`: boulder, weed, carcass or vent | Tank stages only. A kind with any placed stands exactly there, in place of its count in the stage's Landmarks |
-| `exit` | `to`: the id of a level in a world (`docs/WORLDS.md`), `r` 3 to 12 | Fields only. Walking the Maw into it leaves by that link; inert outside a world |
+| `exit` | `to`: the id of a level in a world (`docs/WORLDS.md`), `r` 3 to 12, `opens`: `goal` (default) or `always` | Fields only. Walking the Maw into it leaves by that link; inert outside a world. An exit that opens on the goal stays shut until the level's goal is met |
+| `beacon` | `r` 3 to 15 | Fields only. Where a Reach goal is met |
 | `prefab` | `prefab` (a key in `level.prefabs`), `turn` 0 to 359 degrees | One placing of a prefab (below) |
 
 - **Prefabs.** `level.prefabs` is `{ key: { name, parts: [{ type, dx, dy, ...properties }] } }`: each part a thing, placed from the prefab's own middle. A part's `tower` may be `"#2"`, the third part of the same prefab. Pages never see prefabs: `ForgeLevel.expand(level)` gives the level with every placing turned into its parts (ids `<placing>.<n>`, each marked `from`), and the checks say what is wrong with a part of its placing. `makePrefab(level, ids, name)` and `unpackPrefab(level, id)` return the commands that make one and take one apart. A prefab cannot hold the Maw's start or another prefab. A level file always holds the prefabs it uses. The editor also keeps a **library** on the device (`forge-prefabs`): a prefab saved there can be placed in any level, and is copied into that level as it is placed.
@@ -181,3 +182,19 @@ The **Creatures** tab (fields only: a stage's creatures are its roster).
 Not yet: composing a new body (the hex compose and its bloom) inside the editor; bodies are picked from the species. A creature's attack timings (how long a charge locks on, and so on) are the pattern's own; only speed scales them. Diet is the tank's and does not apply to field encounters.
 
 `games/the-maw/tests/editor-creatures.py` checks it at desktop and phone sizes, and that the field plays a made creature with its own health, speed and body, and the Maw with its level's body and kit (21 PASS).
+
+## The goal (version 5, fields)
+
+`goal` is what clears a field level: `{ "type": "none" | "eat" | "kill" | "reach" | "survive", "n", "species", "target", "secs" }`; only the fields its type reads matter.
+
+| type | met when | reads |
+|---|---|---|
+| `none` | never: the level has no goal, and every exit is open | |
+| `eat` | the Maw has made `n` meals (of `species`, or any when empty) | `n` 1 to 200, `species` |
+| `kill` | the encounter `target` is dead, or all of them (`"all"`). They come back later; the count keeps them | `target` |
+| `reach` | the Maw walks into a beacon | needs a `beacon` entity |
+| `survive` | `secs` seconds have passed in the level | `secs` 5 to 1800 |
+
+Meeting it shows "Goal met" on screen, opens every exit whose `opens` is `goal`, and sets the world flag `cleared-<level id>` for the run, so a world link can also say `needs: "cleared-<id>"`. The field page shows the goal as a line at the top ("Eat 10 · 4 / 10"). A level played without a world counts the goal the same way. Progress of eat, kill and survive starts again if the page is loaded again; a goal already met stays met in a world (the flag). Files before version 5 come forward with no goal and exits that open on it, which is the same as before.
+
+Checked by `games/the-maw/tests/field-goal.py` (each kind, exits, the flag) and `editor-goal.py`.
