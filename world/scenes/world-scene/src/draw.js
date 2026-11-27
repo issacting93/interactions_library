@@ -2,122 +2,14 @@
 // One of the page's scripts, loaded in order (World Scene.html); they share their top-level names as one script did.
 
 // ---------- draw ----------
-let runs = [];
-let walkLastT = null, walkDt = 0;
-function writeSpines() {
-  { const now = performance.now() / 1000; walkDt = walkLastT == null || paused ? 0 : Math.min(0.05, now - walkLastT); walkLastT = now; }
-  // deepest drawn first; within a depth band, fish of one kind sit together so each run is one draw call
-  for (const f of sim.fish) f.band = Math.floor(f.z * 8);
-  sim.fish.sort((a, b) => (b.band - a.band) || (a.sp - b.sp) || (b.z - a.z));
-  runs = [];
-  for (let i = 0; i < sim.fish.length; i++) {
-    const last = runs[runs.length - 1];
-    if (last && last.sp === sim.fish[i].sp) last.n++; else runs.push({ sp: sim.fish[i].sp, row0: i, n: 1 });
-  }
-  const n = sim.fish.length;
-  for (let i = 0; i < n; i++) {
-    const f = sim.fish[i], c = f.chain, row = i * TEX_W * 4;
-    const sw = SPECIES[f.sp].swim, bl = EcologySim.bodyLen(sim, f), A = S.wiggle * bl * sw.amp * (1 - 0.8 * (f.ground || 0));   // walking: the body is carried, not waved
-    // the swim wave rides on top of the trailing chain (not stored, so it never accumulates)
-    for (let k = 0; k < K; k++) {
-      const s = k / (K - 1);
-      const k0 = Math.max(0, k - 1), k1 = Math.min(K - 1, k + 1);
-      let tx = c[k1 * 2] - c[k0 * 2], ty = c[k1 * 2 + 1] - c[k0 * 2 + 1];
-      const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
-      const off = A * (0.12 + 0.88 * Math.pow(s, sw.ampPow)) * Math.sin(f.phase - s * Math.PI * 2 * sw.waves);
-      spineData[row + k * 4] = c[k * 2] + ty * off;
-      spineData[row + k * 4 + 1] = c[k * 2 + 1] - tx * off;
-      spineData[row + k * 4 + 2] = f.cz[k];
-      spineData[row + k * 4 + 3] = f.croll[k];
-    }
-    spineData[row + K * 4] = f.phase;
-    spineData[row + K * 4 + 1] = f.seed;
-    spineData[row + K * 4 + 2] = bl / SPECIES[f.sp].LEN;
-    { const lit = Math.max(SPECIES[f.sp].glow, 1 - 0.8 * f.z); // light falls off with depth, steeply —
-      // unless the species glows its own light (angler's lure, jelly's pulse), which ignores depth
-      const bk = S.beh === 'on' && sim.speciesRT[f.sp].beh.blink ? 0.35 + 0.9 * Math.pow(0.5 + 0.5 * Math.sin(performance.now() * 0.001 * sim.speciesRT[f.sp].beh.blink + f.seed * 3), 3) : 1;
-      spineData[row + K * 4 + 3] = lit * lit * (f.darkRoll < S.dark ? 0.09 : 1) * (1 - 0.85 * f.cloak) * bk * f.fade * (1 + 0.8 * f.gulp); }   // shadow fish: barely lit; a cloaked rogue fades
-    spineData[row + (K + 1) * 4] = f.tuck; spineData[row + (K + 1) * 4 + 1] = f.turnS;
-    spineData[row + (K + 1) * 4 + 2] = f.puff; spineData[row + (K + 1) * 4 + 3] = f.alert;
-    spineData[row + (K + 2) * 4] = f.glide; spineData[row + (K + 2) * 4 + 1] = f.flap;
-    // walking legs: feet planted on the tank floor, posed on the spine just written
-    EcologyWalk.write(spineData, row, f, SPECIES[f.sp], (k) => [spineData[row + k * 4], spineData[row + k * 4 + 1]],
-      bl / SPECIES[f.sp].LEN, walkDt, null, K, SPECIES[f.sp].BY0, SPECIES[f.sp].LEN);
-  }
-  gl.bindTexture(gl.TEXTURE_2D, spineTex);
-  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TEX_W, Math.max(1, n), gl.RGBA, gl.FLOAT, spineData, 0);
-}
-
-function camUniforms(u) {
-  gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform3fv(u.uCam, cam.eye);
-  gl.uniform1f(u.uShift, cam.shift); gl.uniform1f(u.uShiftX, cam.shiftX); gl.uniform1f(u.uRefDist, cam.refDist);
-  if (u.uIrisMode) gl.uniform1f(u.uIrisMode, S.irisMode);
-  if (u.uOrtho) gl.uniform1f(u.uOrtho, S.projection === 'ortho' ? 1 : 0);
-  if (u.uWhite) gl.uniform1f(u.uWhite, styled() && !(window.ENVX && ENVX.colour()) ? 1 : 0);
-}
+// The creatures are drawn by the shared renderer (src/creatures.js -> packages/render/ecology-render.js), the code Specimen runs. This file
+// draws the world round them: towers, city, terrain, a place's water and plants, snow, glow, and the final blit.
 function draw(t) {
-  const n = sim.fish.length;
-  writeSpines();
-
-  const cloudPass = (alpha) => {
-    const u = cloudProg.u;
-    gl.useProgram(cloudProg.p);
-    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, spineTex); gl.uniform1i(u.uSpine, 1);
-    gl.uniform2f(u.uRes, vw, vh); gl.uniform1f(u.uTime, t); gl.uniform1f(u.uIris, S.iris);
-    camUniforms(u);
-    gl.uniform1f(u.uDensity, S.density);
-    gl.uniform1f(u.uPt, Math.max(1, S.size / 70) * dpr);
-    gl.uniform1f(u.uAlpha, alpha);
-    gl.bindVertexArray(quadVAO);
-    for (const r of runs) {
-      const sp = SPECIES[r.sp], c = sp.cloud;
-      gl.uniform1f(u.uLEN, sp.LEN); gl.uniform1i(u.uRow0, r.row0); gl.uniform1i(u.uNFan, c.nFan); gl.uniform1f(u.uWing, (sp.wing || 0) * S.wings);
-      gl.uniform4fv(u.uHead, c.head); gl.uniform4fv(u.uBody, c.body); gl.uniform4fv(u.uWh, c.wh);
-      gl.uniform4fv(u.uFanA, sp.fanA); gl.uniform4fv(u.uFanB, sp.fanB); gl.uniform4fv(u.uFanC, sp.fanC);
-      gl.drawArraysInstanced(gl.POINTS, 0, CLOUD_N, r.n);
-    }
-  };
-  // one draw per run of same-species fish
-  const fishPass = (prog, which, mode, filter) => {
-    for (const r of runs) {
-      const sp = SPECIES[r.sp], vao = sp[which];
-      if (!vao.count || (filter && !filter(sp))) continue;
-      gl.uniform1f(prog.u.uBY0, sp.BY0); gl.uniform1f(prog.u.uLEN, sp.LEN);
-      gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sp.partTex); gl.uniform1i(prog.u.uParts, 2);
-      gl.uniform4fv(prog.u.uKeyT, sp.keyT); gl.uniform1i(prog.u.uKeyN, sp.keyN);
-      gl.uniform1i(prog.u.uRow0, r.row0); gl.uniform1f(prog.u.uWing, (sp.wing || 0) * S.wings);
-      const pc = window.ENVX && ENVX.paint(sp);   // a set piece's colours for this species
-      if (prog.u.uColLo) gl.uniform3fv(prog.u.uColLo, pc ? pc[1] : sp.colLo);
-      if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, pc ? pc[0] : sp.colHi);
-      gl.bindVertexArray(vao.vao);
-      gl.drawElementsInstanced(mode, vao.count, gl.UNSIGNED_SHORT, 0, r.n);
-    }
-  };
-  const solidEnv = !!(window.ENVX && ENVX.solid());   // a set piece in Solid: the shared renderer draws the creatures (ENVX.creatures, below), not these passes
-  // Draw: 3D (the shared renderer, ENVX.creatures; a place whose look is Lines falls back to the sigil), Sigil, Both or Cloud (this page's own line drawing)
-  const showSigil = S.mode !== 'cloud' && !solidEnv, showCloud = (S.mode === 'both' || S.mode === 'cloud') && !solidEnv;
-  const common = (prog, lineW, layer) => {
-    gl.useProgram(prog.p);
-    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, spineTex); gl.uniform1i(prog.u.uSpine, 1);
-    gl.uniform2f(prog.u.uRes, vw, vh); camUniforms(prog.u);
-    gl.uniform1f(prog.u.uLineW, lineW); gl.uniform1f(prog.u.uLayer, layer);
-    gl.uniform1f(prog.u.uZScale, 1 / (MAX_FISH * 256 + 4));
-    gl.uniform1f(prog.u.uTime, t);
-    if (prog.u.uIris) { gl.uniform1f(prog.u.uIris, S.iris); gl.uniform1f(prog.u.uTimeF, t); }
-    if (prog.u.uPtSize) gl.uniform1f(prog.u.uPtSize, Math.max(1.5, S.size / 45) * dpr);
-    if (prog.u.uEnvLit) gl.uniform1f(prog.u.uEnvLit, window.ENVX && ENVX.colour() ? 1 : 0);
-  };
-
   if (S.glow > 0) {
     gl.bindFramebuffer(gl.FRAMEBUFFER, glowA.fb); gl.viewport(0, 0, glowA.w, glowA.h);
     gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
     gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
     gl.blendEquation(gl.MAX);   // overlapping bodies (tight schools, small dense shapes like wisp) take the brightest contribution instead of summing — plain additive blend let close-packed fish stack past white
-    if (showSigil) {
-      common(lineProg, 1.3, 1); gl.uniform1f(lineProg.u.uAlpha, 0.22);   // thinner/dimmer glow source — dense bodies (fins, whiskers, overlapping segments) were stacking additively into a blown-out white core
-      fishPass(lineProg, 'lineVAO', gl.TRIANGLES);
-    }
-    if (showCloud) cloudPass(0.22);
     drawTowers(t, true);   // glow-tagged tower/city parts only (windows, halos, aura) — same MAX-additive source as the fish lines above
     drawCity(t, true);
     drawCreatureLines(t, true);
@@ -165,26 +57,10 @@ function draw(t) {
   }
   window.ENVX && ENVX.under(t);   // a set piece's floor: the pond bed, its light, the shadows on it
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
-  if (showSigil) {
-    // translucent, glassy bodies: real alpha blending (FILL_FS/LINE_FS both output it in their alpha
-    // channel now, not baked into rgb as a fake darken-toward-black the way it used to be) -- depth
-    // write stays on, so solid scenery (towers, mountains) still correctly hides a fish behind it,
-    // the trade-off being two overlapping translucent fish at different depths won't blend with each
-    // other (the nearer one's depth write still rejects the farther one), only with the background
-    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    if (window.ENVX && ENVX.fill()) { common(fillProg, 0, 0); gl.uniform1f(fillProg.u.uAlpha, ENVX.fill()); fishPass(fillProg, 'fillVAO', gl.TRIANGLES, sp => sp.lineVAO.count > 0); }   // a set piece's painted bodies, under their lines
-    common(lineProg, Math.max(0.35, Math.min(0.8, S.size / 220)), 1); gl.uniform1f(lineProg.u.uAlpha, window.ENVX && ENVX.fill() ? 0.85 : S.mode === 'both' ? 0.35 : 0.6);
-    fishPass(lineProg, 'lineVAO', gl.TRIANGLES);
-    // a few species (jelly, puffer, dragon) have no separate stroke mesh at all — their whole silhouette
-    // is the fill plate, so without this they'd render as nothing rather than a stroke
-    common(fillProg, 0, 0); gl.uniform1f(fillProg.u.uAlpha, 0.6);
-    fishPass(fillProg, 'fillVAO', gl.TRIANGLES, sp => sp.lineVAO.count === 0);
-    gl.disable(gl.BLEND);
-  }
   drawTowers(t, false);   // opaque: shares this pass's depth buffer with the fish above, so each occludes the other correctly
   drawCity(t, false);
   if (window.ENVX && ENVX.plants) ENVX.plants(t);   // a place's plants, in the same depth buffer
-  if (solidEnv) ENVX.creatures(t);   // the 3D bodies, sharing this pass's depth buffer with the towers and the city
+  drawCreatures(t);   // src/creatures.js: the shared renderer, in this pass's depth buffer with the towers, the city and the plants
   if (styled() && S.routeAtmo && atmoWorld) { routeAtmoCtx.recipe = curStyle; RouteAtmoGL2.drawSolid(gl, routeAtmoCtx, atmoWorld, cam); }   // ridge ring, pines, pilgrims -- opaque, shares this pass's depth buffer too
   // glowing creature-line architecture: additive like the fish's own glow, tested against (but not
   // writing into) the depth buffer the occluders above just wrote, so it's hidden behind nearer solid objects
@@ -237,18 +113,6 @@ function draw(t) {
     for (const c of sim.carcasses) { gl.uniform3f(cu.uPos, c.x, c.y, c.z * tankDepth()); gl.uniform1f(cu.uLife, c.life); gl.drawArrays(gl.POINTS, 0, 1); }
     gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
   }
-  if (showCloud) {
-    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
-    cloudPass(S.mode === 'both' ? 0.45 : 0.75);
-    gl.disable(gl.BLEND); gl.depthMask(true); gl.depthFunc(gl.LESS);
-  }
-
-  if (S.shimmer > 0 && showSigil) {
-    gl.depthMask(false); gl.depthFunc(gl.LEQUAL); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
-    common(ptProg, 0, 1); gl.uniform1f(ptProg.u.uAlpha, S.shimmer);
-    fishPass(ptProg, 'ptsVAO', gl.POINTS);
-  }
-
   if (S.glow > 0) {
     gl.disable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
     gl.useProgram(glowCompProg.p); gl.bindVertexArray(quadVAO);

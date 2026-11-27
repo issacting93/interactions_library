@@ -6,7 +6,6 @@
   'use strict';
   const X = window.ENVX; if (!X) return;
   const { clamp, lerp, hex, toHex, clone, LAYERS, LAYER_NAMES, ROLE_NAMES, SHOT_NAMES, STORE, saved, keep, applyCast, applySetting, buildPaths, centerOf, layerOf, live, rowLists, specName } = X.lib;
-  const eco = () => X.lib.ECO;
   // ------------------------------------------------------------------ the Places tab
   const ui = {};
   const el = (tag, attrs, html) => { const e = document.createElement(tag); if (attrs) for (const k in attrs) { if (k === 'class') e.className = attrs[k]; else if (k === 'style') e.style.cssText = attrs[k]; else e.setAttribute(k, attrs[k]); } if (html != null) e.innerHTML = html; return e; };

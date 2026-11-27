@@ -806,7 +806,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     r.trailBuf = target(gl, r.canvas.width, r.canvas.height);
     r.trailBuf.depth = gl.createRenderbuffer();
     gl.bindRenderbuffer(gl.RENDERBUFFER, r.trailBuf.depth);
-    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, r.canvas.width, r.canvas.height);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, r.canvas.width, r.canvas.height);   // 24 bits: at 16 a line and the solid under it share a depth step from far off, and flicker
     gl.bindFramebuffer(gl.FRAMEBUFFER, r.trailBuf.fb);
     gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, r.trailBuf.depth);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -920,6 +920,86 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     Object.assign(r.terr, { n, w: tank.w, h: tank.h, d: tank.d });
   }
 
+  // ---- the creature passes: ONE implementation, run by frame() (Specimen, the tank pages) and by drawInto() (a host's own world: World Scene,
+  // Forge Scenes, the Maw). A host draws its creatures with the same code, the same order and the same state as Specimen does; it only brings its
+  // own camera. Change how creatures are drawn here, never in a host.
+  //   passTools(r, { cam, runs, render, dpr, t, sim, coresOn, ED?, spineTex? }) -> { common(prog, lineW, layer), fishPass(prog, which, mode, filter?, over?, hold?) }
+  //   creaturePasses(r, T, { render, coresOn, lineW (half a line's width, tank units), alpha, ED? })
+  function passTools(r, o) {
+    const gl = r.gl, cam = o.cam, runs = o.runs, render = o.render, dpr = o.dpr, t = o.t, sim = o.sim, ED = o.ED || null, coresOn = o.coresOn, spineTex = o.spineTex || r.spineTex;
+    const common = (prog, lineW, layer) => {
+      gl.useProgram(prog.p);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, spineTex); gl.uniform1i(prog.u.uSpine, 1);
+      gl.uniform2f(prog.u.uRes, r.canvas.width, r.canvas.height); camUniforms(gl, prog.u, cam, render.irisMode);
+      gl.uniform1f(prog.u.uLineW, lineW); gl.uniform1f(prog.u.uLayer, layer);
+      gl.uniform1f(prog.u.uZScale, 1 / (r.maxFish * 256 + 4));
+      gl.uniform1f(prog.u.uTime, t);
+      if (prog.u.uIris) { gl.uniform1f(prog.u.uIris, render.iris); gl.uniform1f(prog.u.uTimeF, t); }
+      if (prog.u.uPtSize) gl.uniform1f(prog.u.uPtSize, Math.max(1.5, (sim.cfg.size || 70) / 45) * dpr);
+    };
+    // one draw per run of same-species creatures. over: other runs (a trail's ghosts); hold: keep the caller's blend and depth state (the backing pass)
+    const fishPass = (prog, which, mode, filter, over, hold) => {
+      for (const run of (over || runs)) {
+        const sp = r.species[run.sp], vao = sp && sp[which];
+        if (!vao || !vao.count || (filter && !filter(sp))) continue;
+        gl.uniform1f(prog.u.uBY0, sp.BY0); gl.uniform1f(prog.u.uLEN, sp.LEN);
+        gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sp.partTex); gl.uniform1i(prog.u.uParts, 2);
+        gl.uniform4fv(prog.u.uKeyT, sp.keyT); gl.uniform1i(prog.u.uKeyN, sp.keyN);
+        gl.uniform1i(prog.u.uRow0, run.row0); gl.uniform1f(prog.u.uWing, sp.wing * render.wings);
+        if (prog.u.uColLo) gl.uniform3fv(prog.u.uColLo, sp.colLo);
+        if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, sp.colHi);
+        if (prog.u.uIris) gl.uniform1f(prog.u.uIris, render.iris * (sp.look ? (render.lookIris ?? 0.16) : 1));   // a species wearing a look keeps to its colours: only a little of the rainbow film is left on its lines
+        if (prog.u.uFlat) gl.uniform1f(prog.u.uFlat, ED ? 1 - (ED.rise ?? 1) : 0); if (prog.u.uPick) gl.uniform1f(prog.u.uPick, ED && ED.pick >= 0 ? ED.pick + 1 : 0);
+        if (which === 'coreVAO') { const L = ED && ED.plain ? null : sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); if (!L) gl.uniform1f(prog.u.uLump, 0); const fade = fadeOf(sp, 'coreT0') * (run.alpha ?? 1); gl.uniform1f(prog.u.uFade, fade);
+          if (L) { lookUniforms(gl, prog.u, L, t); if (sp.growOver != null) gl.uniform1f(prog.u.uGrowA, sp.growOver); }
+          if (hold) { /* the caller's */ } else if (fade < 1 || (L && (L.mat === 2 || L.mat === 6 || L.opac < 1))) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, L && L.mat === 6 ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
+        { const co = sp.core || sp.coreOld; if (prog.u.uRaise) gl.uniform1f(prog.u.uRaise, coresOn && co && which !== 'coreVAO' && which !== 'wireVAO' ? co.H * 1.05 * (ED ? ED.rise ?? 1 : 1) : 0); }
+        gl.bindVertexArray(vao.vao);
+        gl.drawElementsInstanced(mode, vao.count, which === 'coreVAO' || which === 'wireVAO' ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0, run.n);
+      }
+    };
+    return { common, fishPass };
+  }
+  function creaturePasses(r, T, o) {
+    const gl = r.gl, common = T.common, fishPass = T.fishPass, render = o.render, ED = o.ED || null, coresOn = o.coresOn;
+    gl.disable(gl.CULL_FACE); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
+    // the lines: opaque, first. render.lineAlpha (0..1, with cores on): drawn after the solids and blended over them instead.
+    // render.lineColor [r, g, b]: every creature's lines in one flat colour (a host whose ground is light, where dark ink lines vanish)
+    const lineLate = coresOn && render.lineAlpha != null && render.lineAlpha < 0.999;
+    const drawLines = (alpha) => {
+      common(r.lineProg, o.lineW, 1); gl.uniform1f(r.lineProg.u.uAlpha, alpha); gl.uniform1f(r.lineProg.u.uLineFlat, render.lineColor ? 1 : 0);
+      if (render.lineColor) { const keep = r.species.map((sp) => sp && [sp.colHi, sp.colLo]); for (const sp of r.species) if (sp) { sp.colHi = render.lineColor; sp.colLo = render.lineColor; }
+        fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES); r.species.forEach((sp, i) => { if (sp) { sp.colHi = keep[i][0]; sp.colLo = keep[i][1]; } }); }
+      else fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES);
+      gl.uniform1f(r.lineProg.u.uLineFlat, 0);
+    };
+    if (!lineLate) drawLines(render.lineColor ? 1 : o.alpha);
+    // render.backing (0..1): Specimen shows a see-through look (glass, energy, opacity under 1) over black; in a host's lit world it would take on
+    // the world behind it. Backing darkens what is behind such a solid first (its own silhouette), so it reads as in Specimen
+    if (coresOn && render.backing > 0) { const see = (sp) => !!sp.coreVAO && !!sp.look && (sp.look.mat === 2 || sp.look.mat === 6 || sp.look.opac < 1);
+      common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores); gl.uniform1f(r.coreProg.u.uWire, 0);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.ZERO, gl.ONE_MINUS_CONSTANT_ALPHA); gl.blendColor(0, 0, 0, Math.min(1, render.backing)); gl.depthMask(false);
+      fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, see, null, true);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(true); }
+    // the solids
+    if (coresOn) { common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores); gl.uniform1f(r.coreProg.u.uWire, 0); fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, (sp) => !!sp.coreVAO); gl.disable(gl.BLEND); gl.depthMask(true);
+      // an editor's wireframe: every triangle's edges over the solid (cores built with render.core.wire carry them)
+      if (ED && ED.wire > 0) { gl.depthFunc(gl.LEQUAL); gl.uniform1f(r.coreProg.u.uWire, ED.wire); fishPass(r.coreProg, 'wireVAO', gl.LINES); gl.uniform1f(r.coreProg.u.uWire, 0); gl.depthFunc(gl.LESS); }
+      // render.edit.through (0..1): the drawing again over the finished solid, depth ignored, so the SVG reads through the mesh
+      if (ED && ED.through > 0 && (ED.lines ?? 1) > 0) { gl.disable(gl.BLEND); gl.depthMask(false); gl.depthFunc(gl.ALWAYS);
+        common(r.lineProg, o.lineW, 1); gl.uniform1f(r.lineProg.u.uAlpha, ED.through * (ED.lines ?? 1)); gl.uniform1f(r.lineProg.u.uLineFlat, 1);
+        const tc = ED.throughColor || [0.373, 0.827, 0.553], keep = r.species.map((sp) => sp && [sp.colHi, sp.colLo]);   // one flat colour (the Bestiary Forge's green), so the drawing reads over any look
+        for (const sp of r.species) if (sp) { sp.colHi = tc; sp.colLo = tc; }
+        fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES); r.species.forEach((sp, i) => { if (sp) { sp.colHi = keep[i][0]; sp.colLo = keep[i][1]; } }); gl.uniform1f(r.lineProg.u.uLineFlat, 0);
+        gl.depthFunc(gl.LESS); gl.depthMask(true); } }
+    // a trail's ghosts (a look with trail > 0): the same solids at past poses, fading, drawn after the live ones and not writing depth
+    if (coresOn && r.ghostRuns && r.ghostRuns.length) { common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores); gl.uniform1f(r.coreProg.u.uWire, 0); fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, (sp) => !!sp.coreVAO && !!sp.look, r.ghostRuns); gl.disable(gl.BLEND); gl.depthMask(true); }
+    if (lineLate) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); drawLines(render.lineAlpha); gl.disable(gl.BLEND); gl.depthMask(true); }
+    // a species with no stroke mesh at all: its fill plate
+    common(r.fillProg, 0, 0);
+    fishPass(r.fillProg, 'fillVAO', gl.TRIANGLES, (sp) => sp.lineVAO.count === 0);
+  }
+
   function frame(r, opt) {
     const gl = r.gl, sim = opt.sim, t = opt.time;
     const render = Object.assign({ glow: 1.2, iris: 0.95, shimmer: 0.1, trail: 0, dark: 0.3, wings: 1, snow: true, carcasses: true, irisMode: 0, waterAlpha: 0.82 }, opt.render || {});
@@ -933,38 +1013,8 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
 
     const runs = writeSpines(r, sim, t, { wiggle: sim.cfg.wiggle ?? 0.03, beh: sim.cfg.beh ?? 'on', dark: render.dark, walk: opt.walk, lit: render.lit });
 
-    const common = (prog, lineW, layer) => {
-      gl.useProgram(prog.p);
-      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, r.spineTex); gl.uniform1i(prog.u.uSpine, 1);
-      gl.uniform2f(prog.u.uRes, r.canvas.width, r.canvas.height); camUniforms(gl, prog.u, cam, render.irisMode);
-      gl.uniform1f(prog.u.uLineW, lineW); gl.uniform1f(prog.u.uLayer, layer);
-      gl.uniform1f(prog.u.uZScale, 1 / (r.maxFish * 256 + 4));
-      gl.uniform1f(prog.u.uTime, t);
-      if (prog.u.uIris) { gl.uniform1f(prog.u.uIris, render.iris); gl.uniform1f(prog.u.uTimeF, t); }
-      if (prog.u.uPtSize) gl.uniform1f(prog.u.uPtSize, Math.max(1.5, (sim.cfg.size || 70) / 45) * dpr);
-    };
-    const fishPass = (prog, which, mode, filter, over) => {
-      for (const run of (over || runs)) {
-        const sp = r.species[run.sp], vao = sp[which];
-        if (!vao || !vao.count || (filter && !filter(sp))) continue;
-        gl.uniform1f(prog.u.uBY0, sp.BY0); gl.uniform1f(prog.u.uLEN, sp.LEN);
-        gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sp.partTex); gl.uniform1i(prog.u.uParts, 2);
-        gl.uniform4fv(prog.u.uKeyT, sp.keyT); gl.uniform1i(prog.u.uKeyN, sp.keyN);
-        gl.uniform1i(prog.u.uRow0, run.row0); gl.uniform1f(prog.u.uWing, sp.wing * render.wings);
-        if (prog.u.uColLo) gl.uniform3fv(prog.u.uColLo, sp.colLo);
-        if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, sp.colHi);
-        if (prog.u.uIris) gl.uniform1f(prog.u.uIris, render.iris * (sp.look ? (render.lookIris ?? 0.16) : 1));   // a species wearing a look keeps to its colours: only a little of the rainbow film is left on its lines
-        if (prog.u.uFlat) gl.uniform1f(prog.u.uFlat, ED ? 1 - (ED.rise ?? 1) : 0); if (prog.u.uPick) gl.uniform1f(prog.u.uPick, ED && ED.pick >= 0 ? ED.pick + 1 : 0);
-        if (which === 'coreVAO') { const L = ED && ED.plain ? null : sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); if (!L) gl.uniform1f(prog.u.uLump, 0); const fade = fadeOf(sp, 'coreT0') * (run.alpha ?? 1); gl.uniform1f(prog.u.uFade, fade);
-          if (L) { lookUniforms(gl, prog.u, L, t); if (sp.growOver != null) gl.uniform1f(prog.u.uGrowA, sp.growOver); }
-          if (fade < 1 || (L && (L.mat === 2 || L.mat === 6 || L.opac < 1))) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, L && L.mat === 6 ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
-        { const co = sp.core || sp.coreOld; if (prog.u.uRaise) gl.uniform1f(prog.u.uRaise, coresOn && co && which !== 'coreVAO' && which !== 'wireVAO' ? co.H * 1.05 * (ED ? ED.rise ?? 1 : 1) : 0); }
-        gl.bindVertexArray(vao.vao);
-        gl.drawElementsInstanced(mode, vao.count, which === 'coreVAO' || which === 'wireVAO' ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0, run.n);
-      }
-    };
-    // render.cores (0..1, how bright): the thick parts solid under the lines. Built per species the first time it is in view
-    const coresOn = render.cores > 0 && !!window.PartSolid;
+    const coresOn = render.cores > 0 && !!window.PartSolid;   // render.cores (0..1, how bright): the thick parts solid under the lines. Built per species the first time it is in view
+    const T = passTools(r, { cam, runs, render, dpr, t, sim, coresOn, ED }), common = T.common, fishPass = T.fishPass;
     staleCores(r, gl, render);
     if (coresOn) for (const run of runs) needCore(r, gl, run.sp, render.core || {}, render);
 
@@ -1001,23 +1051,7 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     // opt.under(cam): a page's own scenery (towers, a wood), drawn into the frame before the creatures with the frame's depth, so a creature
     // behind a tower is hidden by it and one in front is not. It gets the frame's camera (vp, eye, shift, shiftX) and may leave any GL state
     if (opt.under) { gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND); opt.under(cam); gl.bindFramebuffer(gl.FRAMEBUFFER, r.trailBuf.fb); gl.viewport(0, 0, r.canvas.width, r.canvas.height); gl.bindVertexArray(null); gl.disable(gl.POLYGON_OFFSET_FILL); gl.colorMask(true, true, true, true); gl.activeTexture(gl.TEXTURE0); }
-    gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
-    common(r.lineProg, onePx(cam, dpr), 1); gl.uniform1f(r.lineProg.u.uAlpha, 0.9 * (ED ? ED.lines ?? 1 : 1));
-    fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES);
-    if (coresOn) { common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores); gl.uniform1f(r.coreProg.u.uWire, 0); fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, (sp) => !!sp.coreVAO); gl.disable(gl.BLEND); gl.depthMask(true);
-      // an editor's wireframe: every triangle's edges over the solid (cores built with render.core.wire carry them)
-      if (ED && ED.wire > 0) { gl.depthFunc(gl.LEQUAL); gl.uniform1f(r.coreProg.u.uWire, ED.wire); fishPass(r.coreProg, 'wireVAO', gl.LINES); gl.uniform1f(r.coreProg.u.uWire, 0); gl.depthFunc(gl.LESS); }
-      // render.edit.through (0..1): the drawing again over the finished solid, depth ignored, so the SVG reads through the mesh
-      if (ED && ED.through > 0 && (ED.lines ?? 1) > 0) { gl.disable(gl.BLEND); gl.depthMask(false); gl.depthFunc(gl.ALWAYS);
-        common(r.lineProg, onePx(cam, dpr), 1); gl.uniform1f(r.lineProg.u.uAlpha, ED.through * (ED.lines ?? 1)); gl.uniform1f(r.lineProg.u.uLineFlat, 1);
-        const tc = ED.throughColor || [0.373, 0.827, 0.553], keep = r.species.map((sp) => sp && [sp.colHi, sp.colLo]);   // one flat colour (the Bestiary Forge's green), so the drawing reads over any look
-        for (const sp of r.species) if (sp) { sp.colHi = tc; sp.colLo = tc; }
-        fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES); r.species.forEach((sp, i) => { if (sp) { sp.colHi = keep[i][0]; sp.colLo = keep[i][1]; } }); gl.uniform1f(r.lineProg.u.uLineFlat, 0);
-        gl.depthFunc(gl.LESS); gl.depthMask(true); } }
-    // a trail's ghosts: the same solids at past poses, fading, drawn after the live ones and not writing depth
-    if (coresOn && r.ghostRuns && r.ghostRuns.length) { common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores); gl.uniform1f(r.coreProg.u.uWire, 0); fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, (sp) => !!sp.coreVAO && !!sp.look, r.ghostRuns); gl.disable(gl.BLEND); gl.depthMask(true); }
-    common(r.fillProg, 0, 0);
-    fishPass(r.fillProg, 'fillVAO', gl.TRIANGLES, (sp) => sp.lineVAO.count === 0);
+    creaturePasses(r, T, { render, coresOn, ED, lineW: onePx(cam, dpr), alpha: 0.9 * (ED ? ED.lines ?? 1 : 1) });
 
     if (render.snow) {
       const u = r.snowProg.u;
@@ -1080,61 +1114,10 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
     const coresOn = render.cores > 0 && !!window.PartSolid;
     staleCores(r, gl, render);
     if (coresOn) for (const run of runs) if (r.species[run.sp]) needCore(r, gl, run.sp, render.core || {}, render);
-    const common = (prog, lineW, layer) => {
-      gl.useProgram(prog.p);
-      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, spineTex); gl.uniform1i(prog.u.uSpine, 1);
-      gl.uniform2f(prog.u.uRes, r.canvas.width, r.canvas.height); camUniforms(gl, prog.u, cam, render.irisMode);
-      gl.uniform1f(prog.u.uLineW, lineW); gl.uniform1f(prog.u.uLayer, layer);
-      gl.uniform1f(prog.u.uZScale, 1 / (r.maxFish * 256 + 4)); gl.uniform1f(prog.u.uTime, t);
-      if (prog.u.uIris) { gl.uniform1f(prog.u.uIris, render.iris); gl.uniform1f(prog.u.uTimeF, t); }
-      if (prog.u.uPtSize) gl.uniform1f(prog.u.uPtSize, Math.max(1.5, (sim.cfg.size || 70) / 45) * dpr);
-    };
-    const fishPass = (prog, which, mode, filter, over, hold) => {   // hold: keep the blend and depth state the caller set (the backing pass)
-      for (const run of (over || runs)) {
-        const sp = r.species[run.sp], vao = sp && sp[which];
-        if (!vao || !vao.count || (filter && !filter(sp))) continue;
-        gl.uniform1f(prog.u.uBY0, sp.BY0); gl.uniform1f(prog.u.uLEN, sp.LEN);
-        gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, sp.partTex); gl.uniform1i(prog.u.uParts, 2);
-        gl.uniform4fv(prog.u.uKeyT, sp.keyT); gl.uniform1i(prog.u.uKeyN, sp.keyN);
-        gl.uniform1i(prog.u.uRow0, run.row0); gl.uniform1f(prog.u.uWing, sp.wing * render.wings);
-        if (prog.u.uColLo) gl.uniform3fv(prog.u.uColLo, sp.colLo);
-        if (prog.u.uColHi) gl.uniform3fv(prog.u.uColHi, sp.colHi);
-        if (prog.u.uIris) gl.uniform1f(prog.u.uIris, render.iris * (sp.look ? (render.lookIris ?? 0.16) : 1));
-        if (which === 'coreVAO') { const L = sp.look; gl.uniform1f(prog.u.uLook, L ? 1 : 0); if (!L) gl.uniform1f(prog.u.uLump, 0); const fade = fadeOf(sp, 'coreT0') * (run.alpha ?? 1); gl.uniform1f(prog.u.uFade, fade); if (L) { lookUniforms(gl, prog.u, L, t); if (sp.growOver != null) gl.uniform1f(prog.u.uGrowA, sp.growOver); }
-          if (hold) { /* the caller's */ } else if (fade < 1 || (L && (L.mat === 2 || L.mat === 6 || L.opac < 1))) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, L && L.mat === 6 ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } }
-        { const co = sp.core || sp.coreOld; if (prog.u.uRaise) gl.uniform1f(prog.u.uRaise, coresOn && co && which !== 'coreVAO' ? co.H * 1.05 : 0); }
-        gl.bindVertexArray(vao.vao);
-        gl.drawElementsInstanced(mode, vao.count, which === 'coreVAO' ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, 0, run.n);
-      }
-    };
-    gl.disable(gl.CULL_FACE); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND);
-    // render.lineAlpha (0..1, with cores on): the lines drawn after the solids and blended over them, so a small or far creature
-    // shows its colours through thin lines. At 1 (or unset) the lines are drawn first and opaque, as before.
-    const lineLate = coresOn && render.lineAlpha != null && render.lineAlpha < 0.999;
-    const drawLines = (alpha) => {
-      common(r.lineProg, opt.lineW || (opt.px ? opt.px * Math.max(1.25, dpr) * 0.5 : Math.max(0.35, Math.min(0.8, (sim.cfg.size || 70) / 220))), 1);   // opt.px: one device pixel in the host's tank units, for a 1 px line
-      gl.uniform1f(r.lineProg.u.uAlpha, alpha);
-      // render.lineColor [r, g, b]: every creature's lines in that one flat colour (a host whose ground is light, where dark ink lines vanish)
-      gl.uniform1f(r.lineProg.u.uLineFlat, render.lineColor ? 1 : 0);
-      if (render.lineColor) { const keep = r.species.map((sp) => sp && [sp.colHi, sp.colLo]); for (const sp of r.species) if (sp) { sp.colHi = render.lineColor; sp.colLo = render.lineColor; }
-        fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES); r.species.forEach((sp, i) => { if (sp) { sp.colHi = keep[i][0]; sp.colLo = keep[i][1]; } }); }
-      else fishPass(r.lineProg, 'lineVAO', gl.TRIANGLES);
-      gl.uniform1f(r.lineProg.u.uLineFlat, 0);
-    };
-    if (!lineLate) drawLines(render.lineColor ? 1 : opt.alpha || 0.9);
-    // render.backing (0..1): Specimen shows a see-through look (glass, energy, opacity under 1) over black, so in a host's own lit world it would take
-    // on the world behind it and look washed out. Backing darkens what is behind such a solid first (by its own silhouette), so it reads as in Specimen
-    if (coresOn && render.backing > 0) { const see = (sp) => !!sp.coreVAO && !!sp.look && (sp.look.mat === 2 || sp.look.mat === 6 || sp.look.opac < 1);
-      common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores);
-      gl.enable(gl.BLEND); gl.blendFunc(gl.ZERO, gl.ONE_MINUS_CONSTANT_ALPHA); gl.blendColor(0, 0, 0, Math.min(1, render.backing)); gl.depthMask(false);   // what is behind, darkened by the backing; colour from the shader ignored
-      fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, see, null, true);
-      gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(true); }
-    if (coresOn) { common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores); fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, (sp) => !!sp.coreVAO); gl.disable(gl.BLEND); gl.depthMask(true); }
-    // a trail's ghosts (a look with trail > 0): its past poses, fading, as frame() draws them. In a host's world the creature crosses the scene, so they stream out behind it
-    if (coresOn && r.ghostRuns && r.ghostRuns.length) { common(r.coreProg, 0, 0); gl.uniform1f(r.coreProg.u.uCore, render.cores); fishPass(r.coreProg, 'coreVAO', gl.TRIANGLES, (sp) => !!sp.coreVAO && !!sp.look, r.ghostRuns); gl.disable(gl.BLEND); gl.depthMask(true); }
-    if (lineLate) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); drawLines(render.lineAlpha); gl.disable(gl.BLEND); gl.depthMask(true); }
-    common(r.fillProg, 0, 0);
-    fishPass(r.fillProg, 'fillVAO', gl.TRIANGLES, (sp) => sp.lineVAO.count === 0);
+    const T = passTools(r, { cam, runs, render, dpr, t, sim, coresOn, spineTex }), common = T.common, fishPass = T.fishPass;
+    // opt.lineW: half a line's width in the host's tank units (opt.px: one device pixel there, for a one-pixel line as Specimen's)
+    const lineW = opt.lineW || (opt.px ? opt.px * Math.max(1, dpr) * 0.5 : Math.max(0.35, Math.min(0.8, (sim.cfg.size || 70) / 220)));
+    creaturePasses(r, T, { render, coresOn, lineW, alpha: opt.alpha || 0.9 });
     if (render.shimmer > 0) {
       gl.depthMask(false); gl.depthFunc(gl.LEQUAL); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
       common(r.ptProg, 0, 1); gl.uniform1f(r.ptProg.u.uAlpha, render.shimmer);

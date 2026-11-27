@@ -153,63 +153,15 @@ void main() { float a = smoothstep(0.5, 0.05, length(gl_PointCoord - 0.5));
   vec3 col = vec3(0.58, 0.24, 0.17);
   o = vec4(col * vA * a, 1.0); }`;
 const carcassProg = program(CARCASS_VS, CARCASS_FS);
-const cloudProg = program(CLOUD_VS, CLOUD_FS);
-const fillProg = program(FISH_VS, FILL_FS);
-const lineProg = program(FISH_VS, LINE_FS);
-const ptProg = program(FISH_VS, PT_FS);
 const blurProg = program(QUAD_VS, BLUR_FS);
 const compProg = program(QUAD_VS, COMP_FS);
 const glowCompProg = program(QUAD_VS, GLOW_COMP_FS);
 const fadeProg = program(QUAD_VS, FADE_FS);
 
-// a thin stroke ribbon traced along the fill mesh's own boundary edges (outer silhouette, plus any
-// internal seams between parts that don't share a triangle edge) — for species whose source art has
-// no separate stroke-only linework (jelly, puffer, dragon all have fill plates but no "lattice"
-// paths, so without this they'd have nothing to draw once the renderer stopped drawing fill)
-function makeVAO(verts, stride, hasNorm, indices) {
-  const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
-  const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
-  const F = 4;
-  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, stride * F, 0);
-  if (hasNorm) {
-    gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 2, gl.FLOAT, false, stride * F, 2 * F);
-    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, stride * F, 4 * F);
-  } else {
-    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, stride * F, 2 * F);
-    gl.disableVertexAttribArray(2); gl.vertexAttrib2f(2, 0, 0);
-  }
-  const ib = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
-  gl.bindVertexArray(null);
-  return { vao, count: indices.length };
-}
 const quadVAO = gl.createVertexArray();
-for (const sp of SPECIES) {
-  sp.partTexData = sp.partTex; sp.keyTimes = sp.keyT; delete sp.partTex; delete sp.keyT;
-  EcologyWalk.legs(sp);                    // find walking legs while the geometry is still here
-  const fillV = b64(sp.fillV, Float32Array), fillI = b64(sp.fillI, Uint16Array);
-  let lineV = b64(sp.lineV, Float32Array), lineI = b64(sp.lineI, Uint16Array);
-  if (lineV.length === 0) { const outline = buildOutline(fillV, fillI); lineV = outline.v; lineI = outline.i; }
-  const ptsI = []; for (let i = 0; i < lineV.length / 5; i += 26) ptsI.push(i);
-  sp.fillVAO = makeVAO(fillV, 3, false, fillI);
-  sp.lineVAO = makeVAO(lineV, 5, true, lineI);
-  sp.ptsVAO = makeVAO(lineV, 5, true, new Uint16Array(ptsI));
-  sp.BY0 = sp.bounds[1]; sp.LEN = sp.bounds[3] - sp.bounds[1];
-  // part data texture: 4 texels per part (group/side/pivot, extent, rig, keyed poses)
-  sp.partTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, sp.partTex);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 5, sp.parts, 0, gl.RGBA, gl.FLOAT, EcologyWalk.partTex(sp));   // + the leg column
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-  sp.keyT = new Float32Array(4); sp.keyT.set(sp.keyTimes || []); sp.keyN = (sp.keyTimes || []).length;
-  const pad = a => { const o = new Float32Array(MAX_FANS * 4); o.set(a); return o; };
-  sp.fanA = pad(sp.cloud.fanA); sp.fanB = pad(sp.cloud.fanB); sp.fanC = pad(sp.cloud.fanC);
-  delete sp.fillV; delete sp.fillI; delete sp.lineV; delete sp.lineI;
-}
-
-// spine data texture: one row per fish
-const spineData = new Float32Array(TEX_W * MAX_FISH * 4);
-const spineTex = gl.createTexture();
-gl.bindTexture(gl.TEXTURE_2D, spineTex);
-gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, TEX_W, MAX_FISH, 0, gl.RGBA, gl.FLOAT, null);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+// the species as data only: the shared renderer (src/creatures.js) builds and draws their geometry from window.EcologySpeciesPristine.
+// Kept here: walking legs (the sim's walkers read them) and each one's length
+for (const sp of SPECIES) { EcologyWalk.legs(sp); sp.BY0 = sp.bounds[1]; sp.LEN = sp.bounds[3] - sp.bounds[1]; delete sp.fillV; delete sp.fillI; delete sp.lineV; delete sp.lineI; }
 
 function target(w, h) {
   const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -234,7 +186,7 @@ function resize() {
   trailBuf = target(canvas.width, canvas.height);
   trailBuf.depth = gl.createRenderbuffer();
   gl.bindRenderbuffer(gl.RENDERBUFFER, trailBuf.depth);
-  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, canvas.width, canvas.height);
+  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, canvas.width, canvas.height);   // 24 bits: at 16, a creature's lines and the solid under them share a depth step from far off and flicker
   gl.bindFramebuffer(gl.FRAMEBUFFER, trailBuf.fb);
   gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, trailBuf.depth);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);

@@ -60,6 +60,7 @@ void main(){ vec2 q = vP / uScale; vec3 c = uCol; float a = uA;
   float gl = step(0.985, vn(q * 9.0 + vec2(uT * 0.9, uT * 0.4))) * step(0.5, vn(q * 0.8 - uT * 0.05)); c += vec3(1.0) * gl * 0.8; a += gl * 0.4;   // glints
   if (uBelow > 0.5) { float s = fbm(q * 0.9 + uT * 0.06); c = mix(c, uRibC, smoothstep(0.55, 0.8, s) * 0.5); a = mix(a, a + 0.25, smoothstep(0.5, 0.85, s)); }   // from beneath: the bright, moving ceiling
   if (uMoon > 0.0) { vec2 m = (vP - uTank * vec2(0.5, 0.2)) / uTank.x; float w = exp(-(m.x * m.x * 900.0 + m.y * m.y * 5.0)) * smoothstep(0.35, 0.75, vn(q * vec2(3.0, 9.0) + uT * vec2(0.3, 0.7))) * (0.5 + 0.5 * vn(q * vec2(7.0, 2.0) - uT * 0.4)); c += vec3(0.95, 0.95, 0.85) * w * uMoon; a += w * uMoon * 0.6; }
+  a *= 1.0 - smoothstep(0.7, 1.9, length(vP - uTank * 0.5) / uTank.x);   // the water fades out with distance: no hard far edge across the picture when seen from low down
   o = vec4(c, clamp(a, 0.0, 0.95)); }`;
   // light shafts, a dip to dark across a cut, and a soft vignette
   const OVER_FS = `#version 300 es

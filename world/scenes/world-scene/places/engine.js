@@ -7,7 +7,7 @@
 // this browser (localStorage 'forge:world-places'), and Copy gives its JSON to paste into places/places.js.
 //
 // World Scene calls it at these seams: ENVX.tick(dt) after the sim steps; ENVX.camera(dt) in updateCamera; ENVX.under(t) after the frame is cleared
-// (the floor); ENVX.creatures(t) after the towers and city (the solid creatures); ENVX.over(t) before the frame is shown (surface, shafts, vignette,
+// (the floor); ENVX.over(t) before the frame is shown (surface, shafts, vignette,
 // the dip between shots); ENVX.hides(layer); ENVX.bg(), colour(), paint(sp), fill(), solid().
 // Z runs down: z = 0 is the top of the tank, tankDepth() the floor. Tilt 0 looks straight down; over 90 looks up.
 // Links: ?place=<id> (or ?env=), ?shots=0, ?bodies=specimen|styled|flat.
@@ -99,7 +99,7 @@
     return out; }
   X.edited = (id) => { const m = saved()[id]; return !!m && (!(window.WorldPlaces || {})[id] || m._v === PLACES_V); };
   let snap = null;
-  const SKEYS = ['count', 'snow', 'glow', 'shimmer', 'trail', 'beh', 'flow', 'mode', 'dz', 'routeAtmo', 'wings', 'view', 'orbit', 'style'];
+  const SKEYS = ['count', 'snow', 'glow', 'shimmer', 'trail', 'beh', 'flow', 'dz', 'routeAtmo', 'wings', 'view', 'orbit', 'style'];
   function setStyle(id) { if (!id || S.style === id) return; if (window.ForgeCityHost && ForgeCityHost.setStyle) ForgeCityHost.setStyle(id); else { const sel = document.getElementById('style-pick'); if (sel) { sel.value = id; sel.dispatchEvent(new Event('change')); } } }
   // the place's depth (or World's, coming back): the slider shows it, and the city stands on the new floor
   function syncDepth() { const el = document.getElementById('dz'), o = document.getElementById('o-dz'); if (el) { el.value = S.dz; if (o) o.textContent = Math.round(S.dz * 100) + '%'; } if (typeof cityFollowDepth === 'function') cityFollowDepth(); }
@@ -111,15 +111,11 @@
     if (id !== 'world' && !snap) { snap = { S: {}, pop: Object.assign({}, sim.pop) }; for (const k of SKEYS) snap.S[k] = S[k]; }
     for (const f of sim.fish) f.steer = null;
     if (id === 'world') { if (snap) { for (const k of SKEYS) if (k !== 'style') S[k] = snap.S[k]; Object.assign(sim.pop, snap.pop); EcologySim.setCount(sim); setStyle(snap.S.style); snap = null; syncDepth(); }
-      X.P = null; X.R = null; X.bodies = X.worldBodies; window.PlaceFlora && PlaceFlora.clear(); for (const b of ['r-city', 'r-tower']) { const e = document.getElementById(b); if (e) e.hidden = false; } }
+      X.P = null; X.R = null; X.bodies = 'specimen'; window.PlaceFlora && PlaceFlora.clear(); for (const b of ['r-city', 'r-tower']) { const e = document.getElementById(b); if (e) e.hidden = false; } }
     else { X.P = X.places[id]; X.R = { st: [] }; X.id = id; applySetting(); X.R.c = centerOf(X.P); X.R.paths = buildPaths(X.P, X.R.c); X.bodies = (X.P.look && X.P.look.creatures) || 'specimen'; applyCast(25); X.replant(); }
-    X.id = id; X.shotT = 0; X.shot = null; cam.fc = null; ECO && (ECO._looksFor = null); syncLink(); X.ui && X.ui.refresh(); return id; };
+    X.id = id; X.shotT = 0; X.shot = null; cam.fc = null; syncLink(); X.ui && X.ui.refresh(); return id; };
   X.reset = () => { const s = saved(); delete s[X.id]; try { localStorage.setItem(STORE, JSON.stringify(s)); } catch (e) { /* */ } X.set(X.id); };
   X.hides = (layer) => !!(X.P && X.P.setting && !X.P.setting.city && ['city', 'towers', 'walkers', 'terrain'].includes(layer)) || !!(X.P && layer === 'terrain');
-  X.flat = () => X.P && X.P.look && X.P.look.flat;
-  X.colour = () => !!(X.P && X.bodies === 'flat' && X.flat());
-  X.paint = (sp) => { const F = X.flat(); const c = X.colour() && F.colours && F.colours[sp.key]; return c ? (c._ || (c._ = [hex(c[0]), hex(c[1])])) : null; };
-  X.fill = () => (X.colour() && X.flat().fill) || 0;
   X.tick = function (dt) { if (!X.P) return; runCast(dt); X.shotT += dt; };
   X.warm = (sec) => { const n = Math.round(sec * 30); for (let i = 0; i < n; i++) { EcologySim.step(sim, 1 / 30); runCast(1 / 30); } };
 
@@ -156,7 +152,6 @@
     gl.disable(gl.BLEND); gl.enable(gl.DEPTH_TEST); };
 
   // ------------------------------------------------------------------ the creatures, solid: the shared renderer (packages/render/ecology-render.js) in this page's context
-  let ECO = null;
   const toHex = (c) => '#' + c.map((v) => Math.round(clamp(v, 0, 1) * 255).toString(16).padStart(2, '0')).join('');
   function styledLook(sp, savedLook) { const Y = (X.P.look && X.P.look.styled) || {}, row = (X.P.cast || []).find((r) => r.species === sp.key);
     let L = (Y.looks && Y.looks[sp.key]) || (Y.all ? Object.assign({}, Y.all) : null) || (savedLook && savedLook.material !== 'own' ? savedLook : null);   // all: one look for every creature (Lantern Vigil's Energy)
@@ -165,18 +160,11 @@
     if (row && row.stone) L = Object.assign({}, L, Y.stone || { material: 'golem', grow: 'moss', growAmount: 0.5 });   // stone keeps the creature's own colours
     if (Y.paint) L = Object.assign({}, L, Y.paint);
     return L; }
-  X.worldBodies = 'specimen';   // World itself: its creatures in 3D as Specimen draws them, or World Scene's own line drawing
-  X.solid = () => !!(S.mode === '3d' && X.bodies !== 'flat' && window.EcologyRender && window.PartSolid);   // the drawer's Draw: 3D; a place's Look can still ask for Lines
-  X.creatures = function (t) { const ER = window.EcologyRender, ES0 = window.EcologySpeciesPristine || EcologySpecies;
-    if (!ECO) { ECO = ER.create(canvas, ES0, { maxFish: MAX_FISH }); ECO._looksFor = null; ECO.ghostCap = 360; }   // trails (a look's trail, as Energy's): 360 past poses in all, shared out
-    const lk = X.id + ':' + X.bodies + ':' + X.lookRev; if (ECO._looksFor !== lk) { ECO._looksFor = lk; const CL = window.CreatureLooks || {};
-      ES0.SPECIES.forEach((sp, i) => { const sv = CL[sp.key]; ER.setLook(ECO, i, X.bodies === 'styled' && X.P ? styledLook(sp, sv) : (sv && sv.material !== 'own' ? sv : null)); }); }
-    const dist = X.lastDist || cam.dist || cam.refDist, px = dist * 2 * Math.tan(20 * DEG) / (vh * dpr), Y = (X.P && X.P.look && X.P.look.styled) || {};   // px: a pixel in world units where the camera really is, so lines stay one pixel at any zoom or lens
-    // as Specimen draws them (cores 1, the Shape tab's shapes, dark 0, lit 1, lines in each look's own colour); styled: white lines, lighter
-    const R = X.bodies === 'styled' ? { lineColor: [1, 1, 1], lineAlpha: Y.lineAlpha ?? 0.3 } : {}, shapes = window.CreatureShapes && Object.keys(window.CreatureShapes).length ? { shape: window.CreatureShapes } : undefined;
-    ER.drawInto(ECO, { sim, time: t, vp: cam.vp, eye: cam.eye, refDist: cam.refDist, shift: cam.shift, shiftX: cam.shiftX, dpr, px, lineW: px * dpr * 0.5,
-      render: Object.assign({ cores: 1, core: shapes, coreWorker: X.manualOn ? false : undefined, wings: S.wings, dark: 0, shimmer: 0, lit: 1, backing: X.bodies === 'styled' ? (Y.backing ?? 0) : 1 }, R) });   // backing: see-through looks over black, as in Specimen
-    gl.bindVertexArray(null); gl.useProgram(null); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.disable(gl.CULL_FACE); };
+  // how this place restyles the creatures, for src/creatures.js (which draws them with the shared renderer). Look: Specimen (nothing changed),
+  // Styled (the place's own looks; white lines, lighter) or Lines (the drawing only)
+  X.creatureStyle = () => { if (!X.P) return null; const Y = (X.P.look && X.P.look.styled) || {}, styled = X.bodies === 'styled';
+    return { key: X.id + ':' + X.bodies + ':' + X.lookRev, lines: X.bodies === 'flat', look: styled ? styledLook : null,
+      render: styled ? { lineColor: [1, 1, 1], lineAlpha: Y.lineAlpha ?? 0.3, backing: Y.backing ?? 0 } : null }; };
   X.lookRev = 0;
 
   // ------------------------------------------------------------------ plants (places/flora.js: Forge Scenes' plantings in this tank)
@@ -207,7 +195,7 @@
   window.ENVX = X;
   X.places = allPlaces();
   X.groundZ = groundZ;
-  X.lib = { clamp, lerp, hex, toHex, clone, LAYERS, LAYER_NAMES, ROLE_NAMES, SHOT_NAMES, STORE, saved, keep, applyCast, applySetting, buildPaths, centerOf, layerOf, live, rowLists, specName, get ECO() { return ECO; } };   // for the Places tab (places/ui.js)
+  X.lib = { clamp, lerp, hex, toHex, clone, LAYERS, LAYER_NAMES, ROLE_NAMES, SHOT_NAMES, STORE, saved, keep, applyCast, applySetting, buildPaths, centerOf, layerOf, live, rowLists, specName, };   // for the Places tab (places/ui.js)
   const q = new URLSearchParams(location.search);
   if (['specimen', 'styled', 'flat'].includes(q.get('bodies'))) X.bodyOverride = q.get('bodies');
   if (q.get('shots') === '0') X.shotsOn = false;

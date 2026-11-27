@@ -24,6 +24,6 @@ function setSpecies(key) {
 }
 setSpecies(S.species);
 document.querySelectorAll('input[name="flow"]').forEach(r => r.addEventListener('change', () => { S.flow = r.value; }));
-document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener('change', () => { S.mode = r.value; }));
+document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener('change', () => { S.mode = r.value; }));   // Draw: 3D or Lines (src/creatures.js)
 document.querySelectorAll('input[name="beh"]').forEach(r => r.addEventListener('change', () => { S.beh = r.value; }));
 document.querySelectorAll('input[name="ptr"]').forEach(r => r.addEventListener('change', () => { S.ptr = r.value; }));
