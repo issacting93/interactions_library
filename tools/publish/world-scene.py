@@ -22,7 +22,7 @@ html = open(html_path, encoding='utf8').read()
 for name in os.listdir(PAGE_DIR):
     if name.endswith('.js') or name.endswith('.css'):
         shutil.copy(os.path.join(PAGE_DIR, name), os.path.join(out, name))
-for sub in ('src', 'places'):
+for sub in ('src', 'places', 'sigils'):
     shutil.copytree(os.path.join(PAGE_DIR, sub), os.path.join(out, sub))
 
 # a script from elsewhere in world/ (not packages/): laid in js/ like page.py's

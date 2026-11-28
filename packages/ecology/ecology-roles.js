@@ -482,6 +482,7 @@
     cast.forEach((r, i) => {
       (ROLES[r.role] || drift)(lists[i], r, ctx, dt, states[i] || (states[i] = {}));
       if (r.turn) limitTurn(lists[i], r.turn, dt);
+      if (r.size) for (const f of lists[i]) f.scale = r.size; // a row's own size, a multiple of the species' (colossi, tiny figures)
     });
   }
 

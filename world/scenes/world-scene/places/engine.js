@@ -491,9 +491,22 @@
     X.R.wb = null;
     if (warm) X.warm(warm);
   }
+  // a place's title card: its name and its story, over the scene for a few seconds as it loads (P.story)
+  function titleCard(P) {
+    let el = document.getElementById('placeCard');
+    if (!el) { el = document.createElement('div'); el.id = 'placeCard'; document.body.appendChild(el); }
+    clearTimeout(titleCard.t);
+    if (!P || !P.story) { el.classList.remove('on'); return; }
+    el.innerHTML = '<h2></h2><p></p>';
+    el.firstChild.textContent = P.title || '';
+    el.lastChild.textContent = P.story;
+    requestAnimationFrame(() => el.classList.add('on'));
+    titleCard.t = setTimeout(() => el.classList.remove('on'), 9000);
+  }
   X.set = function (id) {
     X.places = allPlaces();
     if (!X.places[id]) id = 'world';
+    titleCard(id === 'world' ? null : X.places[id]);
     if (id !== 'world' && !snap) {
       snap = { S: {}, pop: Object.assign({}, sim.pop) };
       for (const k of SKEYS) snap.S[k] = S[k];
@@ -906,6 +919,12 @@
       base: groundZ(),
       h: h || tankDepth() * 0.5,
     };
+  };
+  // the place's gold sigil etchings (setting.etch { amount, size (of the tower's height), colour, glow }); null when it has none
+  X.etch = function () {
+    const E = X.P && X.P.setting && X.P.setting.etch;
+    if (!E) return null;
+    return { amount: E.amount ?? 1, size: E.size ?? 0.24, glow: E.glow ?? 0.8, c: hex(E.colour || '#f2c36b') };
   };
   // the stone's uniforms (towers and city share towerProg): set for the frame, cleared after
   X.mossStone = function (on) {

@@ -15,7 +15,7 @@ import { chromium } from 'playwright';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = path.join(ROOT, 'tools/capture/out/ws');
 fs.mkdirSync(OUT, { recursive: true });
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.png': 'image/png' };
 const [id = 'all', at = ''] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const FOLLOW = (process.argv.find((a) => a.startsWith('--follow=')) || '').slice(9);   // species[:zoom]: a close follow shot of it
 const STYLE = (process.argv.find((a) => a.startsWith('--style=')) || '').slice(8);

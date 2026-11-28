@@ -493,6 +493,8 @@ window.WorldPlaces = {
   overgrowth: {
     moment: { name: 'The green surges', at: 11, len: 8, grow: 1, glow: 0.2, shaft: 0.3, colour: '#d6ff9a' },
     title: 'Overgrown Tower',
+    story:
+      'Before the water rose, the tower was a lighthouse for something that never came. Its wardens cut their seals into the stone, one for every promise. The moss kept the promises when they could not. Now the stone dragon coils round it as a keeper, and everything small is learning to live in its shadow.',
     note: 'The old tower gone green: mossed stone creatures round it, pollen in the light, koi circling its foot.',
     setting: {
       style: 'relief',
@@ -525,6 +527,7 @@ window.WorldPlaces = {
       mist: { amount: 0.18, colour: '#d8e8a8' },
       growth: { kind: 'moss', amount: 1, timelapse: true },
       mist: { amount: 0.16, colour: '#d8e8a8' },
+      etch: { amount: 1, size: 0.3, glow: 0.5, colour: '#f2c36b' }, // Sigil Forge seals etched in gold on the walls
     }, // moss on the ground and the stone, growing in over the loop as the plants do
     paths: {
       ring: { x: 'center', y: 'center', along: 0.14, across: 0.14, angle: 0, square: 2 },
@@ -533,7 +536,7 @@ window.WorldPlaces = {
     // the old tower gone green: koi round its foot, Bramble Wyrms and a Spine Dragon turned to mossed stone coiled round it,
     // Frond Wings in the green, Butterfly Worms and Black Monarchs round the ledges, wisps hanging like pollen in the shafts
     cast: [
-      { species: 'koi', n: 24, role: 'stream', path: 'ring', z: [0.6, 0.82], speed: 0.42, width: 0.05, stone: true },
+      { species: 'koi', n: 24, role: 'stream', path: 'ring', z: [0.6, 0.82], speed: 0.42, width: 0.05, stone: true, size: 0.8 },
       {
         species: 'dragon',
         n: 1,
@@ -544,6 +547,7 @@ window.WorldPlaces = {
         speed: 0.3,
         width: 0.02,
         stone: true,
+        size: 2.3, // a colossus: the tower's own size
       },
       {
         species: 'chain-colony',
@@ -555,6 +559,7 @@ window.WorldPlaces = {
         speed: 0.08,
         bob: 0.03,
         stone: true,
+        size: 1.5,
       },
       {
         species: 'frond-serpent',
@@ -565,10 +570,11 @@ window.WorldPlaces = {
         inner: 0.12,
         speed: 0.15,
         stone: true,
+        size: 1.7,
       },
       { species: 'worm', n: 6, role: 'drift', z: [0.1, 0.35], radius: 0.25, speed: 0.3, stone: true },
-      { species: 'black-monarch', n: 4, role: 'drift', z: [0.05, 0.25], radius: 0.3, speed: 0.28, stone: true },
-      { species: 'wisp', n: 24, role: 'drift', z: [0.1, 0.6], radius: 0.4, speed: 0.2, bob: 0.05, stone: true },
+      { species: 'black-monarch', n: 4, role: 'drift', z: [0.05, 0.25], radius: 0.3, speed: 0.28, stone: true, size: 1.9 },
+      { species: 'wisp', n: 24, role: 'drift', z: [0.1, 0.6], radius: 0.4, speed: 0.2, bob: 0.05, stone: true, size: 0.55 },
     ],
     flora: { kind: 'overgrowth', timelapse: true },
     shots: [

@@ -43,6 +43,29 @@ float growCover(vec3 N, out vec3 g) {
   if (uKind > 2.5) g += uMossTip * 0.35 * smoothstep(0.55, 0.9, m);   // fungus gives a little light
   return cover;
 }`;
+
+// gold sigil etchings (a place's setting.etch): Sigil Forge seals (sigils/seal-atlas.png, 4 x 2, made by tools/sigil-atlas/gen.js) laid on the
+// wall round each tower, four faces to a turn, as many rows as the height takes. uEtchA = tower axis x, y, base z, height; uEtchS = seal size
+// (of the height), a seed, glow. No uEtch (0) is the plain stone.
+const ETCH_GLSL = `
+uniform sampler2D uSig; uniform float uEtch; uniform vec4 uEtchA; uniform vec3 uEtchS; uniform vec3 uEtchC; uniform float uEtchR;
+float eh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float etchA(vec3 N) {
+  if (uEtch <= 0.0) return 0.0;
+  vec2 d = vWorldPos.xy - uEtchA.xy; float r = length(d);
+  if (r < 1e-3 || abs(N.z) > 0.55 || dot(N.xy, d / r) < 0.35) return 0.0;
+  float hh = (uEtchA.z - vWorldPos.z) / uEtchA.w;                                   // 0 foot .. 1 top
+  if (hh < 0.08 || hh > 0.92) return 0.0;
+  float S = min(uEtchA.w * uEtchS.x, 0.8 * 1.5707963 * uEtchR), fa = atan(d.y, d.x) / 6.2831853 * 4.0 + uEtchS.y;
+  float cell = floor(fa), s = (fract(fa) - 0.5) * (6.2831853 * r * 0.25);
+  float vy = hh * uEtchA.w / (S * 1.3), row = floor(vy), fv = (fract(vy) - 0.5) * 1.3;
+  vec2 uv = vec2(s / S + 0.5, 0.5 - fv);
+  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 0.0;
+  float k = floor(eh(vec2(cell, row) + uEtchS.y) * 8.0);
+  vec2 q = (vec2(mod(k, 4.0), floor(k / 4.0)) + uv) * vec2(0.25, 0.5);
+  float edge = smoothstep(0.0, 0.06, min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y)));
+  return texture(uSig, q).a * edge * uEtch;
+}`;
 const TOWER_FS = `#version 300 es
 precision highp float;
 in vec3 vNrm; in vec2 vUV; in vec4 vCol; in vec3 vWorldPos;
@@ -56,11 +79,14 @@ ${StyleRecipes.GLSL}
 uniform float uRoute, uTone;
 ${GROWTH_GLSL}
 uniform float uWet; uniform vec3 uWetC;   // a place's wet stone: a sheen
+${ETCH_GLSL}
 vec3 mossed(vec3 c, vec3 N) {
   vec3 g; float cover = growCover(N, g);
   if (cover > 0.0) c = mix(c, g, cover);
   if (uWet > 0.0) { vec3 V = normalize(uCam - vWorldPos), L = normalize(vec3(0.35, 0.55, -0.6)); float spec = pow(max(dot(reflect(-L, N), V), 0.0), 26.0), sheen = pow(1.0 - max(dot(N, V), 0.0), 3.0);
     c = c * (1.0 - 0.18 * uWet) + uWetC * (spec * 0.9 + sheen * 0.22) * uWet; }   // wet stone: darker, with a hard glint and a sheen at the edges
+  float e = etchA(N) * (1.0 - 0.55 * cover);
+  if (e > 0.0) c = mix(c, uEtchC, clamp(e, 0.0, 1.0)) + uEtchC * e * uEtchS.z * 0.6;   // the etching: gold, a little lit
   return c;
 }
 out vec4 o;
@@ -82,6 +108,24 @@ void main() {
   o = vec4(mossed(col, N), uAlpha * vCol.a * texc.a);
 }`;
 const towerProg = program(TOWER_VS, TOWER_FS);
+// the seal atlas, as a texture (a 1 x 1 clear one until the picture loads)
+const sigTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, sigTex);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+{
+  const im = new Image();
+  im.onload = () => {
+    gl.bindTexture(gl.TEXTURE_2D, sigTex);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, im);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  };
+  im.src = 'sigils/seal-atlas.png';
+}
+const SIG_UNIT = 6;
+
 // Dedicated glass-tower fragment shader (reuses TOWER_VS's vertex stage/attribute layout, so its
 // VAOs are interchangeable with towerProg's — same attribute locations, just a different program
 // object bound when drawing). Kept separate from TOWER_FS rather than adding more uUnlit-style
@@ -497,8 +541,12 @@ function drawTowers(t, glowPass) {
     gl.uniform3f(u.uTint, TOWER_ROUTE_TINT[0] * S.routeBright, TOWER_ROUTE_TINT[1] * S.routeBright, TOWER_ROUTE_TINT[2] * S.routeBright);
     gl.uniform1f(u.uUnlit, 0); gl.uniform1f(u.uUseTex, 0); gl.uniform1f(u.uCutout, 0); gl.uniform1f(u.uAlpha, 1.0);
     styleFlat(u, -0.04);
-    for (const entry of placedTowers) {
+    const et = window.ENVX && ENVX.etch && ENVX.etch();   // the place's gold sigil etchings
+    if (et) { gl.activeTexture(gl.TEXTURE0 + SIG_UNIT); gl.bindTexture(gl.TEXTURE_2D, sigTex); gl.uniform1i(u.uSig, SIG_UNIT); gl.activeTexture(gl.TEXTURE0); gl.uniform3fv(u.uEtchC, et.c); }
+    for (let ti = 0; ti < placedTowers.length; ti++) {
+      const entry = placedTowers[ti];
       gl.uniformMatrix4fv(u.uModel, false, entry.model);
+      if (et) { gl.uniform1f(u.uEtch, et.amount); gl.uniform4f(u.uEtchA, entry.pos[0], entry.pos[1], entry.model[14], entry.built.top * entry.scale); gl.uniform1f(u.uEtchR, (entry.footR || towerDims(entry.spec, entry.builtSeed).r) * entry.scale); gl.uniform3f(u.uEtchS, et.size * (ti === 0 ? 1 : 0.85), (entry.builtSeed % 97) * 0.37 + ti, et.glow); }
       for (const up of entry.uploaded) {
         if (up.isPoints) continue;
         gl.bindVertexArray(up.vao);
@@ -506,6 +554,7 @@ function drawTowers(t, glowPass) {
       }
     }
     gl.bindVertexArray(null);
+    gl.uniform1f(u.uEtch, 0);
     gl.uniform1f(u.uRoute, 0);
     return;
   }
