@@ -328,19 +328,33 @@
       b = ctx.bl(ld),
       hl = toward(ld, tg[0], tg[1], p[0], p[1], b, 6);
     const tr = r.turn ? (r.turn * Math.PI) / 180 : undefined; // a row's own turning speed (degrees a second)
-    head(ld, hl[0], hl[1], spd, dt, tr ? 0.9 : 1.5, tr);
+    head(ld, hl[0], hl[1], spd * clamp(1.25 - (st.lag || 0) * 0.3, 0.45, 1), dt, tr ? 0.9 : 1.5, tr);   // the leader waits when the row has fallen behind its places
     setZ(ctx, ld, z, Math.min(1, dt * 0.6));
-    const h = [Math.cos(ld.ang), Math.sin(ld.ang)];
+    let lagSum = 0;
+    const h = [Math.cos(ld.ang), Math.sin(ld.ang)],
+      gap = r.gap || 1,   // the echelon's spacing, a multiple of the old one (1.25 back, 1.05 across, in body lengths): wide bodies want more
+      lift = r.lift != null ? r.lift : 0.02;   // how much higher each rank flies (a share of the tank's depth); one side a half step lower
     list.slice(1).forEach((f, i) => {
       const rank = (i >> 1) + 1,
-        side = i % 2 ? 1 : -1,
-        tx = ld.x - h[0] * 1.25 * rank * b - h[1] * side * 1.05 * rank * b,
-        ty = ld.y - h[1] * 1.25 * rank * b + h[0] * side * 1.05 * rank * b;
+        side = i % 2 ? 1 : -1;
+      let tx = ld.x - h[0] * 1.25 * gap * rank * b - h[1] * side * 1.05 * gap * rank * b,
+        ty = ld.y - h[1] * 1.25 * gap * rank * b + h[0] * side * 1.05 * gap * rank * b;
+      // keep clear of the others in the row: inside the room one body needs, the slot is pushed away from whoever is too close (the echelon folds in on a turn otherwise)
+      let ox = 0, oy = 0;
+      for (const o of list) { if (o === f) continue; const dx = f.x - o.x, dy = f.y - o.y, d = Math.hypot(dx, dy) || 1e-3, room = 1.7 * b; if (d < room) { ox += (dx / d) * (room - d); oy += (dy / d) * (room - d); } }
+      tx += ox * 1.5; ty += oy * 1.5;
+      lagSum += Math.hypot(tx - f.x, ty - f.y) / b;
       const ahead = (tx - f.x) * h[0] + (ty - f.y) * h[1],
         hh = toward(f, h[0], h[1], tx, ty, b, 3);
       head(f, hh[0], hh[1], clamp(spd * (1 + ahead / (b * 3)), spd * 0.6, spd * 1.5), dt, tr ? 0.9 : 1.5, tr);
-      setZ(ctx, f, z + 0.02 * rank, Math.min(1, dt * 0.6));
+      setZ(ctx, f, z + lift * rank * (side > 0 ? 1 : 0.5), Math.min(1, dt * 0.6));
     });
+    st.lag = list.length > 1 ? lagSum / (list.length - 1) : 0;
+    // and a hard floor: no two of the row closer than a body length (the wings are 0.85 of it); a follower is slid off, the leader holds its line
+    for (let i = 1; i < list.length; i++) for (let j = 0; j < i; j++) {
+      const a = list[i], c = list[j], dx = a.x - c.x, dy = a.y - c.y, d = Math.hypot(dx, dy) || 1e-3, floor = 1.15 * b;
+      if (d < floor) { const k = (floor - d) * Math.min(1, dt * 3) * (j === 0 ? 1 : 0.5) / d; a.x += dx * k; a.y += dy * k; if (j) { c.x -= dx * k; c.y -= dy * k; } }
+    }
   }
   // behind and beside another species' first creature, matching its speed
   function escort(list, r, ctx, dt) {

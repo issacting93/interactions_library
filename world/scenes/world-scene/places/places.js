@@ -64,7 +64,7 @@ window.WorldPlaces = {
         width: 0.08,
         group: 4,
       },
-      { species: 'manta', n: 3, role: 'formation', path: 'sky', z: [0.07, 0.07], speed: 0.42, turn: 20 },
+      { species: 'manta', n: 3, role: 'formation', path: 'sky', z: [0.07, 0.07], speed: 0.42, turn: 20, gap: 1.8, lift: 0.04 },
       { species: 'swift', n: 14, role: 'escort', lead: 'manta', z: [0.03, 0.12], back: 7, side: 2.5 },
       { species: 'ringed-lance-monarch', n: 2, role: 'drift', z: [0.01, 0.04], radius: 0.32, speed: 0.25 },
       { species: 'glass-star', n: 10, role: 'drift', layer: 'mid', radius: 0.3, speed: 0.14 },
@@ -187,7 +187,7 @@ window.WorldPlaces = {
         bob: 0.35,
         bobSpeed: 0.12,
       },
-      { species: 'manta', n: 2, role: 'formation', path: 'wide', z: [0.2, 0.2], speed: 0.38 },
+      { species: 'manta', n: 2, role: 'formation', path: 'wide', z: [0.2, 0.2], speed: 0.38, gap: 1.8, lift: 0.04 },
       { species: 'wisp', n: 30, role: 'drift', z: [0.1, 0.6], radius: 0.4, speed: 0.3, bob: 0.05 },
       { species: 'angler', n: 3, role: 'drift', z: [0.82, 0.9], radius: 0.22, inner: 0.08, speed: 0.15 },
       {
@@ -711,7 +711,7 @@ window.WorldPlaces = {
     // the fortress under snow: mantas over the walls with swifts behind, Lance Monarchs high, two frosted Spine Dragons and Blade
     // Hunters standing guard round the keep, comb drifters like ice in the water, koi turning in the cold below
     cast: [
-      { species: 'manta', n: 3, role: 'formation', path: 'wide', z: [0.1, 0.1], speed: 0.38 },
+      { species: 'manta', n: 3, role: 'formation', path: 'wide', z: [0.1, 0.1], speed: 0.38, gap: 1.8, lift: 0.04 },
       { species: 'swift', n: 12, role: 'escort', lead: 'manta', z: [0.05, 0.15], back: 6, side: 2.5 },
       { species: 'ringed-lance-monarch', n: 3, role: 'drift', layer: 'high', radius: 0.35, speed: 0.25 },
       { species: 'dragon', n: 2, role: 'stream', path: 'ring', z: [0.4, 0.55], speed: 0.3, width: 0.04, stone: true },
@@ -1281,7 +1281,7 @@ window.WorldPlaces = {
     // a long loop: the tower takes frost, then moss, then fungus, then rust (a quarter each); koi round its foot, mantas over, a stone dragon on guard
     cast: [
       { species: 'koi', n: 20, role: 'stream', path: 'ring', z: [0.6, 0.82], speed: 0.4, width: 0.05 },
-      { species: 'manta', n: 2, role: 'formation', path: 'wide', z: [0.12, 0.12], speed: 0.36 },
+      { species: 'manta', n: 2, role: 'formation', path: 'wide', z: [0.12, 0.12], speed: 0.36, gap: 1.8, lift: 0.04 },
       { species: 'swift', n: 8, role: 'escort', lead: 'manta', z: [0.05, 0.15], back: 6, side: 2.5 },
       { species: 'comb-drifter', n: 4, role: 'drift', z: [0.2, 0.5], radius: 0.4, speed: 0.1, bob: 0.03 },
       {
@@ -1430,7 +1430,7 @@ window.WorldPlaces = {
         speed: 0.55,
         width: 0.1,
       },
-      { species: 'manta', n: 3, role: 'formation', path: 'sky', z: [0.02, 0.02], speed: 0.3 },
+      { species: 'manta', n: 3, role: 'formation', path: 'sky', z: [0.02, 0.02], speed: 0.3, gap: 1.8, lift: 0.04 },
       { species: 'ringed-lance-monarch', n: 2, role: 'drift', layer: 'high', radius: 0.32, speed: 0.2 },
       { species: 'koi', n: 20, role: 'stream', path: 'low', layer: 'deep', speed: 0.4, width: 0.1, group: 7 },
     ],

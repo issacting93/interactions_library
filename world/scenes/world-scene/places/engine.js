@@ -345,7 +345,7 @@
     }
   };
   X.writeSaved = writeSaved;
-  const PLACES_V = 6; // the built-in places' version: raise it when they are redesigned
+  const PLACES_V = 7; // the built-in places' version: raise it when they are redesigned
   function keep() {
     const s = saved();
     if (X.P && X.id !== 'world') {
