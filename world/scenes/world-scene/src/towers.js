@@ -449,17 +449,31 @@ function solidSpire(spec, model, scale) {
     b = CreatureSpire.buildSpireGL2(spec.spire, { detail: O.lines != null ? O.lines : 3, solid: SpireSolid.sink({ detail: O.detail != null ? O.detail : 0.6, depth: O.depth != null ? O.depth : 1 }) });
   } catch (e) { console.warn('[world-scene] solid tower failed', e); return null; }
   const m = b.solid; if (!m || !m.indices || !m.indices.length) return null;
-  const n = m.positions.length / 3, positions = new Float32Array(m.positions), normals = new Float32Array(n * 3), color = new Float32Array(n * 4);
-  mat4TransformPoints(positions, model);
-  for (let i = 0; i < n; i++) {   // the model turns local y to -z and local z to y (uniform scale): normals follow
-    normals[i * 3] = m.normals[i * 3]; normals[i * 3 + 1] = m.normals[i * 3 + 2]; normals[i * 3 + 2] = -m.normals[i * 3 + 1];
-    const ao = m.ao ? m.ao[i] : 1; color[i * 4] = color[i * 4 + 1] = color[i * 4 + 2] = ao; color[i * 4 + 3] = 1;
-  }
-  // the lit panes behind a bay's holes are for the creature shader's glow; in a flat style they read as black plates, so they are left out
-  const pane = SpireSolid.SECS.indexOf('pane'), keep = [];
-  for (let i = 0; i < m.indices.length; i += 3) if (!m.sec || m.sec[m.indices[i]] !== pane) keep.push(m.indices[i], m.indices[i + 1], m.indices[i + 2]);
-  console.log('[world-scene] solid tower: ' + (keep.length / 3) + ' triangles');
-  return uploadGeoPart({ positions, normals, color, indices: Uint32Array.from(keep), mode: 'triangles', materialTag: 'solid' });
+  console.log('[world-scene] solid tower: ' + (m.indices.length / 3) + ' triangles');
+  // drawn by the shared renderer's solids pass (Specimen's creature shader: golem stone, growth, paint ...), in tower space; drawSolidTowers places it
+  return { pos: new Float32Array(m.positions), nrm: new Float32Array(m.normals), idx: new Uint32Array(m.indices), top: b.top };
+}
+// The solid towers, through the shared creature renderer (EcologyRender.solids): its look for the place (setting city.solid.look, else grey stone), each tower's
+// mesh set at its place by a matrix. Host space is the tank's, so ks 1, no offsets; the matrix turns tower y (up) into tank z and tower z into tank y.
+const SOLID_STONE = { material: 'golem', pattern: 'veins', colors: ['#b9b3a0', '#26241c', '#f2c36b', '#e6dfc6', '#8d8c74'], lumps: 0.25, roughness: 0.55, vein: 0.5, emissive: 0.15, grain: 1, fresnel: 0.5, grow: 'none' };
+const solidLooks = new Map();
+function drawSolidTowers(t) {
+  const ER = window.EcologyRender, r = typeof creatureRender !== 'undefined' ? creatureRender : null;
+  if (!ER || !r || !placedTowers.length || (window.ENVX && ENVX.hides && ENVX.hides('towers'))) return;
+  const list = [];
+  for (const tw of placedTowers) if (tw.solid) list.push(tw);
+  if (!list.length) return;
+  const C = cityPlan && cityPlan.solid, O = typeof C === 'object' ? C : {};
+  const gm = window.ENVX && ENVX.moss && ENVX.moss();
+  const spec = Object.assign({}, SOLID_STONE, O.look || {}, gm ? { grow: gm.name, growAmount: Math.min(1, gm.amount) } : {});
+  const key = JSON.stringify(spec); let look = solidLooks.get(key);
+  if (!look) { look = ER.lookOf(JSON.parse(key), 7); solidLooks.set(key, look); }
+  const items = list.map((tw) => { const s = tw.scale, bz = tw.model[14];
+    return { mesh: tw.solid, matrix: new Float32Array([s, 0, 0, 0, 0, s, 0, 0, 0, 0, s, 0, tw.pos[0], -bz, tw.pos[1], 1]), color: [0.8, 0.78, 0.7], look, qk: (O.stone || 6) / Math.max(1, tw.solid.top || 20) }; });
+  gl.disable(gl.CULL_FACE);
+  ER.solids(r, { vp: cam.vp, eye: cam.eye, shift: cam.shift, shiftX: cam.shiftX, time: t, keepDepth: true }, { list: items, ks: 1, tw2: 0, th2: 0, fz: 0, look });
+  gl.bindVertexArray(null); gl.useProgram(null);
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.depthMask(true); gl.disable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.disable(gl.CULL_FACE);
 }
 function buildPlacedSpire(spec, seed, tankX, tankY, scale) {
   const baseZ = tankDepth() * 0.92 - cityLiftAt(tankX, tankY);
@@ -470,8 +484,7 @@ function buildPlacedSpire(spec, seed, tankX, tankY, scale) {
   const far = spireLines(spec, model, detail), b = far.built;
   const uploaded = [uploadGeoPart(b.occluder)];
   const solid = solidSpire(spec, model, scale);   // a place's solid towers (setting.city.solid): the kit parts as stone, not lines
-  if (solid) uploaded.push(solid);
-  return { spec, built: { top: b.top, reach: b.reach, parts: [] }, uploaded, pos: [tankX, tankY], scale, model, builtSeed: seed,
+  return { spec, solid, built: { top: b.top, reach: b.reach, parts: [] }, uploaded, pos: [tankX, tankY], scale, model, builtSeed: seed,
     creatureOrnament: null, creatureBody: far.part, creatureBodyFull: null, styleOverride: null, spire: true, footR: towerDims(spec, seed).r, lineCount: b.stats.segments };
 }
 // which drawing of a tower this frame: the full one once it stands taller than 30% of the view

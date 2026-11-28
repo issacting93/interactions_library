@@ -60,6 +60,7 @@ function draw(t) {
   if (window.ENVX && ENVX.mossStone) ENVX.mossStone(true);   // a place's moss on the stone
   drawTowers(t, false);   // opaque: shares this pass's depth buffer with the fish above, so each occludes the other correctly
   drawCity(t, false);
+  if (!window.NOSOLID) drawSolidTowers(t);   // a place's solid towers, in the shared creature renderer's stone
   if (window.ENVX && ENVX.mossStone) ENVX.mossStone(false);   // the tower panel's thumbnails share the program: none on them
   if (window.ENVX && ENVX.plants) ENVX.plants(t);   // a place's plants, in the same depth buffer
   drawCreatures(t);   // src/creatures.js: the shared renderer, in this pass's depth buffer with the towers, the city and the plants

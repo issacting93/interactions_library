@@ -18,35 +18,38 @@ fs.mkdirSync(OUT, { recursive: true });
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.png': 'image/png' };
 const [id = 'all', at = ''] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const FOLLOW = (process.argv.find((a) => a.startsWith('--follow=')) || '').slice(9);   // species[:zoom]: a close follow shot of it
+const WIDE = (process.argv.find((a) => a.startsWith('--wide=')) || '').slice(7);   // a high overview shot, zoom 0.5 by default
 const STYLE = (process.argv.find((a) => a.startsWith('--style=')) || '').slice(8);
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 1000, height: 640 } });
 page.on('pageerror', (e) => console.log('page error:', e.message));
+page.on('console', (m) => { const t = m.text(); if (/solid tower|\[world-scene\]/.test(t)) console.log('console:', t.slice(0, 200)); });
 await page.addInitScript(() => {
   let s = 20261127;
   Math.random = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
-  window.requestAnimationFrame = () => 0;
+  window.requestAnimationFrame = () => 0;  window.addEventListener('load', () => { if (window.EcologyRender) EcologyRender.FADE.ms = 0; }); if (location.search.includes('nosolid')) window.NOSOLID = 1;
 });
 await page.route('http://repo.local/**', (r) => {
   const f = path.join(ROOT, decodeURIComponent(new URL(r.request().url()).pathname));
   if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) return r.fulfill({ status: 404, body: '' });
   r.fulfill({ status: 200, body: fs.readFileSync(f), contentType: TYPES[path.extname(f)] || 'application/octet-stream' });
 });
-await page.goto('http://repo.local/world/scenes/world-scene/World%20Scene.html');
+await page.goto('http://repo.local/world/scenes/world-scene/World%20Scene.html' + (process.env.NOSOLID ? '?nosolid' : ''));
 await page.waitForFunction(() => window.ENVX && typeof sim !== 'undefined', null, { timeout: 180000 });
 await page.waitForTimeout(1500);
 const ids = id === 'all' ? await page.evaluate(() => Object.keys(ENVX.places)) : [id];
 for (const p of ids) {
   const times = await page.evaluate(
-    ([p, at, STYLE, FOLLOW]) => {
+    ([p, at, STYLE, FOLLOW, WIDE]) => {
       ENVX.manual(true);
       ENVX.set(p);
       if (FOLLOW) { const [sp, z] = FOLLOW.split(':'); ENVX.P.shots = [{ kind: 'follow', len: 40, target: sp, zoom: +(z || 3) }]; }
+      if (WIDE) ENVX.P.shots = [{ kind: 'above', len: 40, target: 'center', zoom: +WIDE || 0.5 }];
       if (STYLE) { S.style = STYLE; curStyle = StyleRecipes.get(S.style); }
       const total = ENVX.total();
       return at ? at.split(',').map(Number) : p === 'seasons' || (ENVX.P && ENVX.P.setting && ENVX.P.setting.growth && ENVX.P.setting.growth.seasons) ? [0.1, 0.35, 0.6, 0.85].map((u) => +(u * total).toFixed(1)) : [+(total / 3).toFixed(1)];
     },
-    [p, at, STYLE, FOLLOW]
+    [p, at, STYLE, FOLLOW, WIDE]
   );
   for (const t of times) {
     const url = await page.evaluate(
