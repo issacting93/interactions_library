@@ -24,6 +24,10 @@
    Scale is fixed: 1 px of the Spire Forge sheet = 1/16 m (opts.unit), so a tower is as tall
    in World Scene as it is in Spire Forge and its parts keep their native size.
 
+   Solid: pass opts.solid = SpireSolid.sink(...) (packages/city/spire-solid.js) and every kit part is stood up as a solid
+   (PartSolid) through the same placements instead of as flat lines. This file does not know how a part is made solid: it hands
+   the sink the part and the map that places a point of it in the tower, and the sink answers true when it drew the part.
+
    API
      (a genome comes from packages/city/spire-generator.js; this file only stands one up)
      CreatureSpire.layout(genome)              -> flat placements + bands + rails + solids
@@ -31,6 +35,7 @@
        lines:    GL_LINES pairs, local tower space (x, y=up, z), metres
        occluder: { positions, normals, uv, color, indices(Uint32), mode:'triangles', materialTag:'body' }
                  — the lathed silhouette of the same layout, slightly inset, for depth only.
+       solid:    with opts.solid, the parts as one triangle mesh (see spire-solid.js); the parts it drew are not in lines.
 */
 (function () {
   'use strict';
@@ -311,6 +316,8 @@
     const u = opts.unit || 1 / 16, K = { ...SPUN, ...(opts.K || {}) }, W = { ...WEIGHT, ...(opts.weight || {}) };
     const def = opts.color || [0.5, 0.95, 0.7], forceColor = !!opts.forceColor;
     const L = layout(g);
+    const SK = opts.solid || null;
+    if (SK && SK.begin) SK.begin(u, { top: L.top, reach: L.reach });
     const pos = [], col = [];
     const seg = (a, b, rgb) => { pos.push(a[0] * u, a[1] * u, a[2] * u, b[0] * u, b[1] * u, b[2] * u); col.push(rgb[0], rgb[1], rgb[2], rgb[0], rgb[1], rgb[2]); };
     const tint = (hex, w) => { const c = (!forceColor && hexRGB(hex)) || def; return [Math.min(1, c[0] * w), Math.min(1, c[1] * w), Math.min(1, c[2] * w)]; };
@@ -320,7 +327,9 @@
     // scale). 0 keeps every point. A tower seen across the city passes a few px here and its ornament
     // lines are simplified to that tolerance, once per part and scale (cached on the part).
     const detail = opts.detail || 0;
-    const emit = (p, s, rot, flipY, sx, map, w) => {
+    // map(lx, lyDown, lz): lz is how far the point stands off the part's plane (a solid's thickness); the line drawing ignores it
+    const emit = (p, s, rot, flipY, sx, map, w, sec) => {
+      if (SK && SK.part(p, s, rot, flipY, sx, map, sec)) return;
       const r = rot * Math.PI / 180, cr = Math.cos(r), sr = Math.sin(r), fy = flipY ? -1 : 1;
       for (const pl of detail ? simplified(p, detail / Math.max(s, 1e-3)) : p.polys) {
         const rgb = tint(pl.color, w);
@@ -338,13 +347,13 @@
       const sides = it.mirror ? [1, -1] : [1], w = (W[it.sec] || 1) * it.op;
       for (let q = 0; q < k; q++) {
         const phi = (q / k) * Math.PI + (opts.phase || 0), cp = Math.cos(phi), sp = Math.sin(phi);
-        for (const sd of sides) emit(it.p, it.s, it.rot, it.flipY, sd, (lx, ly) => { const X = sd * it.x + lx; return [X * cp, it.y - ly, X * sp]; }, w);
+        for (const sd of sides) emit(it.p, it.s, it.rot, it.flipY, sd, (lx, ly, lz) => { const X = sd * it.x + lx, Z = lz || 0; return [X * cp - Z * sp, it.y - ly, X * sp + Z * cp]; }, w, it.sec);
       }
     };
     // tangent: the part bent onto a cylinder of radius r, centred at angle a
     const tan = (t) => {
       const w = W[t.sec] || 1;
-      emit(t.p, t.s, t.rot || 0, false, 1, (lx, ly) => { const a = t.a + lx / t.r; return [t.r * Math.sin(a), t.y - ly, t.r * Math.cos(a)]; }, w);
+      emit(t.p, t.s, t.rot || 0, false, 1, (lx, ly, lz) => { const a = t.a + lx / t.r, R = t.r + (lz || 0); return [R * Math.sin(a), t.y - ly, R * Math.cos(a)]; }, w, t.sec);
     };
     const circle = (y, r, w, n) => {
       n = n || Math.max(24, Math.min(160, Math.round(TAU * r / 10)));
@@ -396,10 +405,12 @@
       } else spun(it, K[it.sec] || 2);
     }
 
-    const occluder = lathe(L.solids, opts.inset == null ? 0.96 : opts.inset, u, opts.occluderSegments || 40, L.boxes);
+    const occluder = lathe(L.solids, opts.inset == null ? 0.96 : opts.inset, u, opts.occluderSegments || 40, L.boxes, opts.occluderRows || 0);
     const positions = new Float32Array(pos), colors = new Float32Array(col);
-    return { lines: { positions, colors }, occluder, top: L.top * u, reach: L.reach * u, crownY: L.crownY * u,
+    const out = { lines: { positions, colors }, occluder, top: L.top * u, reach: L.reach * u, crownY: L.crownY * u,
       stats: { segments: positions.length / 6, items: L.items.length, bands: L.bands.length, rails: L.rails.length } };
+    if (SK) out.solid = SK.finish();
+    return out;
   }
 
   // ---------- lighter drawings: each polyline reduced to a tolerance (Douglas-Peucker) ----------
@@ -437,8 +448,8 @@
   }
 
   // ---------- occluder: lathed solids (frusta with caps), for depth only ----------
-  function lathe(solids, inset, u, n, boxes) {
-    const P = [], N = [], I = [];
+  function lathe(solids, inset, u, n, boxes, rowPx) {   // rowPx: split each side into rows no taller than this (sheet px), for a look that moves the vertices
+    const P = [], N = [], I = [], UV = [];   // UV: per vertex index, [metres up its wall, the wall's height in metres], on steep sides only
     for (const b of boxes || []) {   // a gate's posts and beams: plain boxes
       const X = [b.x0, b.x1], Yv = [Math.min(b.y0, b.y1), Math.max(b.y0, b.y1)], Z = [b.z0, b.z1];
       const face = (pts, nrm) => { const base = P.length / 3; for (const q of pts) { P.push(q[0] * u, q[1] * u, q[2] * u); N.push(nrm[0], nrm[1], nrm[2]); } I.push(base, base + 1, base + 2, base, base + 2, base + 3); };
@@ -448,12 +459,18 @@
       face([[X[0], Yv[0], Z[0]], [X[0], Yv[0], Z[1]], [X[0], Yv[1], Z[1]], [X[0], Yv[1], Z[0]]], [-1, 0, 0]);
       face([[X[0], Yv[1], Z[1]], [X[1], Yv[1], Z[1]], [X[1], Yv[1], Z[0]], [X[0], Yv[1], Z[0]]], [0, 1, 0]);
     }
-    const ringV = (y, r, ny) => { const base = P.length / 3; for (let i = 0; i <= n; i++) { const a = (i / n) * TAU, s = Math.sin(a), c = Math.cos(a); P.push(r * s * u, y * u, r * c * u); N.push(ny ? 0 : s, ny || 0, ny ? 0 : c); } return base; };
+    // a side ring's normal leans with the slope of the frustum (nr out, nv up); a cap's is straight up or down
+    const ringV = (y, r, ny, nr, nv, wu, wh) => { const base = P.length / 3; for (let i = 0; i <= n; i++) { if (wh) UV[base + i] = [wu, wh]; const a = (i / n) * TAU, s = Math.sin(a), c = Math.cos(a); P.push(r * s * u, y * u, r * c * u); N.push(ny ? 0 : s * nr, ny || nv, ny ? 0 : c * nr); } return base; };
     for (const sd of solids) {
       const r0 = sd.r0 * inset, r1 = sd.r1 * inset, ya = Math.min(sd.y0, sd.y1), yb = Math.max(sd.y0, sd.y1);
       const ra = sd.y0 <= sd.y1 ? r0 : r1, rb = sd.y0 <= sd.y1 ? r1 : r0;
-      const a = ringV(ya, ra), b = ringV(yb, rb);
-      for (let i = 0; i < n; i++) I.push(a + i, b + i, a + i + 1, a + i + 1, b + i, b + i + 1);
+      const sl = Math.hypot(rb - ra, yb - ya) || 1, nr = (yb - ya) / sl, nv = -(rb - ra) / sl;
+      const rows = rowPx ? Math.max(1, Math.min(160, Math.ceil(sl / rowPx))) : 1;
+      const wh = nr > 0.9 ? (yb - ya) * u : 0;   // a wall, if it is steep
+      let a = ringV(ya, ra, 0, nr, nv, 0, wh);
+      for (let k = 1; k <= rows; k++) { const t = k / rows, b = ringV(ya + (yb - ya) * t, ra + (rb - ra) * t, 0, nr, nv, t * wh, wh);
+        for (let i = 0; i < n; i++) I.push(a + i, b + i, a + i + 1, a + i + 1, b + i, b + i + 1);
+        a = b; }
       for (const [y, r, ny] of [[yb, rb, 1], [ya, ra, -1]]) { // caps
         const ctr = P.length / 3; P.push(0, y * u, 0); N.push(0, ny, 0);
         const rim = ringV(y, r, ny);
@@ -462,7 +479,8 @@
     }
     const positions = new Float32Array(P), normals = new Float32Array(N);
     const color = new Float32Array((P.length / 3) * 4).fill(1);
-    return { positions, normals, uv: new Float32Array((P.length / 3) * 2), color, indices: new Uint32Array(I), mode: 'triangles', materialTag: 'body' };
+    const uv = new Float32Array((P.length / 3) * 2); for (const k in UV) { uv[k * 2] = UV[k][0]; uv[k * 2 + 1] = UV[k][1]; }
+    return { positions, normals, uv, color, indices: new Uint32Array(I), mode: 'triangles', materialTag: 'body' };
   }
 
   function hexRGB(hex) {

@@ -24,9 +24,10 @@
      const solid = PartSolid.build(part, { mode: "plate" | "blade" | "belly", thick: 1, inner: 0.35, crease: 0.5, edge: 0.04, res: 64 })
        -> { positions: Float32Array (x, y, z; y up, centred on the drawing), indices: Uint32Array, lines: Float32Array (segment pairs),
             ao: Float32Array (per vertex, 1 open .. 0.35 deep in a crease or hollow), cx, cy (the drawing point at x = y = 0),
-            edge, size, height, tris, verts, ms }
+            edge, size, height, tris, verts, ms, holes, cutIndices }   (cutIndices: the front-face triangles the holes took out, for a pane behind them)
             a vertex's drawing point is (cx + x, cy - y); its z is how far it stands off the drawing's plane (front +, back -)
      thick   how high it rises, as a share of the shape's widest half-width
+     holes   true (or the least size, as a share of the part's): closed shapes drawn inside the outline are cut through, walled round
      inner   -1..1: inner shapes sunk .. raised          crease  0..1: how deep the inner lines press
      edge    the rim's thickness, as a share of the widest half-width          res  mesh points along the longer side
     grid    cells along the longer side of the distance and height fields (default 224); the solve costs its square, so a small part can take fewer
@@ -190,9 +191,13 @@
     for (const p of part.inner.concat(part.lines)) for (const q of dense(p, s)) if (sample(G, G.d, q[0], q[1]) > 0.35 * s) add(q[0], q[1], false);
     const near = (x, y) => { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (cell.has((round(x / (s * 0.4)) + dx) + "," + (round(y / (s * 0.4)) + dy))) return true; return false; };
     for (let r = 0, y = b.y; y <= b.y + b.h; y += s * 0.866, r++) for (let x = b.x + (r & 1 ? s / 2 : 0); x <= b.x + b.w; x += s) if (sample(G, G.d, x, y) > 0.45 * s && !near(x, y)) add(x, y, false);
+    // holes: the closed shapes drawn inside the outline are cut through, if they are big enough to read as an opening
+    const cut = o.holes ? part.inner.filter((p) => { const bb = boxOf([p]); return Math.min(bb.w, bb.h) > (o.holes === true ? 0.07 : o.holes) * size && bb.w * bb.h < 0.7 * b.w * b.h; }) : []; let cutTris = 0; const gone = [];
     const D = new window.Delaunator(Float64Array.from(pts.flat())), tri = D.triangles, keep = [];
     for (let i = 0; i < tri.length; i += 3) { const a = pts[tri[i]], c = pts[tri[i + 1]], e = pts[tri[i + 2]], cx = (a[0] + c[0] + e[0]) / 3, cy = (a[1] + c[1] + e[1]) / 3, d = sample(G, G.d, cx, cy);
-      if (d > 1.5 * G.cs || (d > -1.5 * G.cs && part.outer.some((p) => inside(p.pts, cx, cy)))) keep.push(tri[i], tri[i + 1], tri[i + 2]); }
+      if (!(d > 1.5 * G.cs || (d > -1.5 * G.cs && part.outer.some((p) => inside(p.pts, cx, cy))))) continue;
+      if (cut.length) { let in_ = false; for (const p of cut) if (inside(p.pts, cx, cy)) in_ = !in_; if (in_) { cutTris++; gone.push(tri[i], tri[i + 2], tri[i + 1]); continue; } }   // inside a hole (even-odd across the cut shapes)
+      keep.push(tri[i], tri[i + 1], tri[i + 2]); }
     // front and back faces (y up, centred), then the wall round the rim
     const n = pts.length, cx = b.x + b.w / 2, cy = b.y + b.h / 2, pos = new Float32Array(n * 6), hs = new Float32Array(n); let top = 0;
     for (let i = 0; i < n; i++) { const h = rim[i] ? 0 : height(pts[i][0], pts[i][1]); hs[i] = h; top = max(top, h); const z = edge / 2 + h;
@@ -205,13 +210,17 @@
     const idx = [];
     for (let i = 0; i < keep.length; i += 3) { idx.push(keep[i], keep[i + 2], keep[i + 1]); idx.push(n + keep[i], n + keep[i + 1], n + keep[i + 2]); }   // the drawing's y is flipped, so the winding is too
     if (edge > 0) for (let li = 0; li < loops.length; li++) { const L = loops[li], sgn = area(part.outer[li].pts) > 0 ? 1 : -1; for (let k = 0; k < L.length; k++) { const a = L[k], c = L[(k + 1) % L.length]; if (sgn > 0) idx.push(a, c, n + a, c, n + c, n + a); else idx.push(a, n + a, c, c, n + a, n + c); } }
+    // the wall round each hole: every edge the cut left open that is not the rim's own
+    if (cutTris) { const seen = new Map(), ek = (p, q) => p < q ? p * n + q : q * n + p;
+      for (let i = 0; i < keep.length; i += 3) for (let k = 0; k < 3; k++) { const p = keep[i + k], q = keep[i + (k + 1) % 3], key = ek(p, q); seen.set(key, seen.has(key) ? null : [p, q]); }
+      for (const e of seen.values()) { if (!e || (rim[e[0]] && rim[e[1]])) continue; const p = e[0], q = e[1]; idx.push(p, q, n + q, p, n + q, n + p); } }
     // the drawing, lying on both faces: the outline on the rim, the inner lines on the surface
     const seg = [], lift = 0.004 * size;
     const lay = (p, onRim) => { const d = dense(p, s * 0.5); if (p.closed) d.push(d[0]);
       for (let i = 0; i + 1 < d.length; i++) { const a = d[i], c = d[i + 1], ha = onRim ? 0 : height(a[0], a[1]), hc = onRim ? 0 : height(c[0], c[1]); if (!onRim && (sample(G, G.d, a[0], a[1]) <= 0 || sample(G, G.d, c[0], c[1]) <= 0)) continue;
         for (const sg of [1, -1]) seg.push(a[0] - cx, -(a[1] - cy), sg * (edge / 2 + ha + lift), c[0] - cx, -(c[1] - cy), sg * (edge / 2 + hc + lift)); } };
     for (const p of part.outer) lay(p, true); for (const p of part.inner.concat(part.lines)) lay(p, false);
-    return { positions: pos, indices: Uint32Array.from(idx), lines: Float32Array.from(seg), ao, cx, cy, edge: edge / 2, size, height: top + edge / 2, tris: idx.length / 3, verts: n * 2, ms: typeof performance !== "undefined" ? performance.now() - t0 : 0 };
+    return { positions: pos, indices: Uint32Array.from(idx), lines: Float32Array.from(seg), ao, cx, cy, edge: edge / 2, size, height: top + edge / 2, tris: idx.length / 3, verts: n * 2, holes: cutTris ? cut.length : 0, cutIndices: Uint32Array.from(gone), ms: typeof performance !== "undefined" ? performance.now() - t0 : 0 };
   }
 
   window.PartSolid = { read, build, paths, join };

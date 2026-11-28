@@ -91,7 +91,7 @@ vec3 mossed(vec3 c, vec3 N) {
 }
 out vec4 o;
 void main() {
-  if (uRoute > 0.5) { o = vec4(mossed(stShade(vWorldPos, vNrm, 0.0, uTone, -1.0), normalize(vNrm)), 1.0); return; }
+  if (uRoute > 0.5) { o = vec4(mossed(stShade(vWorldPos, vNrm, 0.0, uTone, -1.0) * vCol.rgb, normalize(vNrm)), 1.0); return; }
   vec3 N = normalize(vNrm);
   vec3 L = normalize(vec3(0.35, 0.55, -0.6));
   float lit = uUnlit > 0.5 ? 1.0 : (0.35 + 0.65 * max(0.0, dot(N, L)));
@@ -435,6 +435,32 @@ function spireLines(spec, model, detail) {
   const positions = new Float32Array(b.lines.positions); mat4TransformPoints(positions, model);
   return { built: b, part: positions.length ? uploadLinePart({ positions, color: b.lines.colors }) : null };
 }
+
+// The kit parts of a Forge tower stood up as solids (packages/city/spire-solid.js, from the Solid Tower page): bays, friezes, ribs, buttresses,
+// crown blades and lamps, one triangle mesh in the tower's space, put through the tower's model like its lines. It is drawn by the stone program
+// with the place's style (and growth, wet sheen, etchings); the body stays the lathed occluder. Vertex colour carries each vertex's crease shade.
+// A place turns it on with city.solid: true (or { detail, depth }). Light detail by default: a tower is 100k to 400k triangles at Normal.
+function solidSpire(spec, model, scale) {
+  const C = cityPlan && cityPlan.solid;
+  if (!C || !window.SpireSolid || !window.PartSolid || !window.Delaunator) return null;
+  const O = typeof C === 'object' ? C : {};
+  let b;
+  try {
+    b = CreatureSpire.buildSpireGL2(spec.spire, { detail: O.lines != null ? O.lines : 3, solid: SpireSolid.sink({ detail: O.detail != null ? O.detail : 0.6, depth: O.depth != null ? O.depth : 1 }) });
+  } catch (e) { console.warn('[world-scene] solid tower failed', e); return null; }
+  const m = b.solid; if (!m || !m.indices || !m.indices.length) return null;
+  const n = m.positions.length / 3, positions = new Float32Array(m.positions), normals = new Float32Array(n * 3), color = new Float32Array(n * 4);
+  mat4TransformPoints(positions, model);
+  for (let i = 0; i < n; i++) {   // the model turns local y to -z and local z to y (uniform scale): normals follow
+    normals[i * 3] = m.normals[i * 3]; normals[i * 3 + 1] = m.normals[i * 3 + 2]; normals[i * 3 + 2] = -m.normals[i * 3 + 1];
+    const ao = m.ao ? m.ao[i] : 1; color[i * 4] = color[i * 4 + 1] = color[i * 4 + 2] = ao; color[i * 4 + 3] = 1;
+  }
+  // the lit panes behind a bay's holes are for the creature shader's glow; in a flat style they read as black plates, so they are left out
+  const pane = SpireSolid.SECS.indexOf('pane'), keep = [];
+  for (let i = 0; i < m.indices.length; i += 3) if (!m.sec || m.sec[m.indices[i]] !== pane) keep.push(m.indices[i], m.indices[i + 1], m.indices[i + 2]);
+  console.log('[world-scene] solid tower: ' + (keep.length / 3) + ' triangles');
+  return uploadGeoPart({ positions, normals, color, indices: Uint32Array.from(keep), mode: 'triangles', materialTag: 'solid' });
+}
 function buildPlacedSpire(spec, seed, tankX, tankY, scale) {
   const baseZ = tankDepth() * 0.92 - cityLiftAt(tankX, tankY);
   const model = new Float32Array([scale, 0, 0, 0,  0, 0, -scale, 0,  0, scale, 0, 0,  tankX, tankY, baseZ, 1]);
@@ -442,7 +468,10 @@ function buildPlacedSpire(spec, seed, tankX, tankY, scale) {
   const pxPerSheet = (scale / 16) * (vh / Math.max(1, 2 * CITY_FOOTPRINT_FRAC * tankW() * 1.2));
   const detail = Math.max(1, Math.min(6, 0.5 / Math.max(pxPerSheet, 1e-3)));
   const far = spireLines(spec, model, detail), b = far.built;
-  return { spec, built: { top: b.top, reach: b.reach, parts: [] }, uploaded: [uploadGeoPart(b.occluder)], pos: [tankX, tankY], scale, model, builtSeed: seed,
+  const uploaded = [uploadGeoPart(b.occluder)];
+  const solid = solidSpire(spec, model, scale);   // a place's solid towers (setting.city.solid): the kit parts as stone, not lines
+  if (solid) uploaded.push(solid);
+  return { spec, built: { top: b.top, reach: b.reach, parts: [] }, uploaded, pos: [tankX, tankY], scale, model, builtSeed: seed,
     creatureOrnament: null, creatureBody: far.part, creatureBodyFull: null, styleOverride: null, spire: true, footR: towerDims(spec, seed).r, lineCount: b.stats.segments };
 }
 // which drawing of a tower this frame: the full one once it stands taller than 30% of the view
