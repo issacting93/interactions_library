@@ -768,7 +768,7 @@ window.WorldPlaces = {
     moment: { name: 'The light swells', at: 12, len: 7, shaft: 1.1, colour: '#ffd98a', glow: 0.35 },
     title: 'Flooded Cathedral',
     story:
-      'The sea took the town in a single winter and stopped half way up the cathedral. The roof fell the year after. The rose window still faces west, and on clear evenings it lights the nave the length of the water. The monarchs keep the old procession from the door to the crossing; nobody has told them the congregation is under their feet.',
+      'The sea took the town in a single winter and stopped half way up the cathedral. The roof fell the year after. The rose window still faces west, and on clear evenings it lights the nave the length of the water. The monarchs still keep the old procession round its walls; nobody has told them the congregation is under the water.',
     note: 'A ruined cathedral the size of a city, flooded to half the height of its piers: a nave of arcades open to the sky, a spire at the crossing, a rose window in the west front, the town drowned round it.',
     setting: {
       style: 'relief',
@@ -814,8 +814,8 @@ window.WorldPlaces = {
       mist: { amount: 0.12, colour: '#2a1a4a' },
     },
     paths: {
-      ring: { x: 'center', y: 'center', along: 0.13, across: 0.13, angle: 0, square: 3 }, // round the crossing, through the aisles
-      nave: { x: 'center', y: 0.3, along: 0.045, across: 0.15, angle: 0, square: 3 }, // down the nave and back, door to crossing
+      ring: { x: 'center', y: 'center', along: 0.14, across: 0.14, angle: 0, square: 2 }, // round the crossing, through the aisles
+      nave: { x: 'center', y: 'center', along: 0.34, across: 0.34, angle: 0, square: 2 }, // the procession, round the whole cathedral (a loop tight enough to fit inside the nave made the monarchs thrash)
       wide: { x: 'center', y: 'center', along: 0.4, across: 0.5, angle: 25, square: 2 },
     },
     // the nave: halo monarchs in procession round the tower, crowned lancers against them, the seraph high in the light, votive wisps, Showa below
