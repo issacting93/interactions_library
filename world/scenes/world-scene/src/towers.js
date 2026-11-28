@@ -82,7 +82,7 @@ uniform float uWet; uniform vec3 uWetC;   // a place's wet stone: a sheen
 ${ETCH_GLSL}
 vec3 mossed(vec3 c, vec3 N) {
   vec3 g; float cover = growCover(N, g);
-  if (cover > 0.0) c = mix(c, g, cover);
+  if (cover > 0.0) { if (uRoute > 0.5 && uStKind < 0.5) g = mix(c, g * (0.45 + 1.1 * dot(c, vec3(0.33))), 0.62); c = mix(c, g, cover); }   // in a flat recipe the growth keeps its hue but sits in its band (the machine garden's plant tint)
   if (uWet > 0.0) { vec3 V = normalize(uCam - vWorldPos), L = normalize(vec3(0.35, 0.55, -0.6)); float spec = pow(max(dot(reflect(-L, N), V), 0.0), 26.0), sheen = pow(1.0 - max(dot(N, V), 0.0), 3.0);
     c = c * (1.0 - 0.18 * uWet) + uWetC * (spec * 0.9 + sheen * 0.22) * uWet; }   // wet stone: darker, with a hard glint and a sheen at the edges
   float e = etchA(N) * (1.0 - 0.55 * cover);

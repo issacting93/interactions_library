@@ -388,10 +388,16 @@ function drawCity(t, glowPass) {
 }
 // switch towerProg into the current style recipe's fill for this draw (needs the atmosphere world for
 // the lantern positions and the band range; without it, falls back to the lit look)
+// a place's own band range (setting.bands: [near, far] times the camera's distance to its target), else the stage's
+function styleBands() {
+  const b = window.ENVX && ENVX.bands && ENVX.bands();
+  atmoWorld.bandK = b || null; atmoWorld.bandD = 0;   // measured to the city's foot (the shots aim above the ground, so the camera's own distance would put the ground in the far bands)
+}
 function styleFlat(u, tone) {
   if (!atmoWorld || !routeAtmoCtx) { gl.uniform1f(u.uRoute, 0); return; }
   gl.uniform1f(u.uRoute, 1);
   routeAtmoCtx.recipe = curStyle;
+  styleBands();
   RouteAtmoGL2.setStyle(gl, u, routeAtmoCtx, atmoWorld, cam, tone + (S.routeBright - 1) * 0.25);
 }
 

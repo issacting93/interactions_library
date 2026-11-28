@@ -64,7 +64,7 @@ function draw(t) {
   if (window.ENVX && ENVX.mossStone) ENVX.mossStone(false);   // the tower panel's thumbnails share the program: none on them
   if (window.ENVX && ENVX.plants) ENVX.plants(t);   // a place's plants, in the same depth buffer
   drawCreatures(t);   // src/creatures.js: the shared renderer, in this pass's depth buffer with the towers, the city and the plants
-  if (styled() && S.routeAtmo && atmoWorld) { routeAtmoCtx.recipe = curStyle; RouteAtmoGL2.drawSolid(gl, routeAtmoCtx, atmoWorld, cam); }   // ridge ring, pines, pilgrims -- opaque, shares this pass's depth buffer too
+  if (styled() && S.routeAtmo && atmoWorld) { routeAtmoCtx.recipe = curStyle; styleBands(); RouteAtmoGL2.drawSolid(gl, routeAtmoCtx, atmoWorld, cam); }   // ridge ring, pines, pilgrims -- opaque, shares this pass's depth buffer too
   // glowing creature-line architecture: additive like the fish's own glow, tested against (but not
   // writing into) the depth buffer the occluders above just wrote, so it's hidden behind nearer solid objects
   gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); lineBlend(true);

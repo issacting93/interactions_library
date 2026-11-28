@@ -440,6 +440,7 @@ void main() {
   // to the farthest ridge, so the city sits mid-band and the ridges step paler behind it
   function bandRange(world, eye) {
     const dx = eye[0] - world.cx, dy = eye[1] - world.cy, dz = eye[2] - world.baseZ, dc = Math.hypot(dx, dy, dz);
+    if (world.bandK) { const d = world.bandD || dc; return [Math.max(1, d * world.bandK[0]), d * world.bandK[1]]; }   // a host's own range, as the machine garden's: times the camera's distance to what it looks at
     return [Math.max(1, dc - world.cityR * 1.6), dc + world.cityR * 2.4];
   }
   // put the style recipe's uniforms on any program that pastes StyleRecipes.GLSL (the host's tower

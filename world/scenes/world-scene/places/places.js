@@ -500,6 +500,15 @@ window.WorldPlaces = {
     note: 'The old tower gone green: mossed stone creatures round it, pollen in the light, koi circling its foot.',
     setting: {
       style: 'relief',
+      // the machine garden's shading: flat bands from a dark moss ink to a pale green haze, one warm lantern colour, stepped
+      recipe: {
+        palette: { ink: '#16231a', fog: '#a9c2a0', line: '#dfe8cf', warm: '#f2c36b', sky: ['#132019', '#35513c', '#7f9c7c'], moon: '#eef2df' },
+        depth: { bands: 6, curve: 1.3, roof: 0.07 },
+        light: { steps: 3, strength: 1, glow: 0.42 },
+        lines: { mode: 'pencil', strength: 0.22 },
+        atmo: { ridges: true, pines: false, moon: false, pilgrims: false, grain: 0.6, vignette: 0.6, bloom: 0.35 },
+      },
+      bands: [0.6, 2.4],
       city: {
         seed: 2209,
         towers: 3,
@@ -882,6 +891,14 @@ window.WorldPlaces = {
     note: 'A drowned machine yard: rusted stone guardians, crawlers working the bed, sparks rising through the orange murk.',
     setting: {
       style: 'relief',
+      // flat bands from soot to a furnace haze; the one warm colour is the furnace
+      recipe: {
+        palette: { ink: '#170c08', fog: '#a8603a', line: '#f0c8a0', warm: '#ffb24a', sky: ['#120806', '#3a1a0e', '#8a4a28'], moon: '#ffe0c0' },
+        depth: { bands: 6, curve: 1.3, roof: 0.07 },
+        lines: { mode: 'pencil', strength: 0.2 },
+        atmo: { ridges: true, pines: false, moon: false, pilgrims: false, grain: 0.7, vignette: 0.7, bloom: 0.4 },
+      },
+      bands: [0.6, 2.4],
       city: {
         seed: 6602,
         towers: 5,
@@ -1209,6 +1226,14 @@ window.WorldPlaces = {
     note: 'One tower through a year: frost, moss, fungus, rust, in turn; the koi circle through all of it.',
     setting: {
       style: 'relief',
+      // flat bands of one grey-green stone; the seasons bring the colour
+      recipe: {
+        palette: { ink: '#18211f', fog: '#aab8b0', line: '#e2e8dc', warm: '#f0c070', sky: ['#141c1c', '#3c4e4c', '#8a9a94'], moon: '#eef0e6' },
+        depth: { bands: 6, curve: 1.3, roof: 0.07 },
+        lines: { mode: 'pencil', strength: 0.2 },
+        atmo: { ridges: true, pines: false, moon: false, pilgrims: false, grain: 0.6, vignette: 0.6, bloom: 0.35 },
+      },
+      bands: [0.6, 2.4],
       city: {
         seed: 5150,
         towers: 2,

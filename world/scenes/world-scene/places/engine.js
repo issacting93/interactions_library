@@ -439,7 +439,12 @@
   }
   function applySetting() {
     const st = X.P.setting || {};
-    setStyle(st.style);
+    // a place's own recipe (setting.recipe: palette, depth, light, lines, atmo over Route Zero): registered under the place's id, then set like any style
+    if (st.recipe && window.StyleRecipes && StyleRecipes.register) {
+      const rid = StyleRecipes.register(Object.assign({ id: 'place-' + X.id, name: X.P.title, base: 'route-zero' }, st.recipe));
+      if (typeof fillStylePick === 'function') fillStylePick();
+      if (S.style === rid && typeof setStyleId === 'function') setStyleId(rid, true); else setStyle(rid);
+    } else setStyle(st.style);
     Object.assign(S, {
       snow: !!st.snow,
       glow: st.glow ?? 0.8,
@@ -921,6 +926,7 @@
     };
   };
   // the place's gold sigil etchings (setting.etch { amount, size (of the tower's height), colour, glow }); null when it has none
+  X.bands = () => (X.P && X.P.setting && X.P.setting.bands) || null;
   X.etch = function () {
     const E = X.P && X.P.setting && X.P.setting.etch;
     if (!E) return null;

@@ -86,14 +86,16 @@
     return out;
   }
   let saved = [];
-  const byId = (id) => saved.find((r) => r.id === id) || BUILTINS.find((r) => r.id === id);
+  const extra = [];   // recipes a page registers for itself (a World Scene place's own look): found by id like a built-in, not saved anywhere
+  function register(r) { const i = extra.findIndex((x) => x.id === r.id); if (i < 0) extra.push(r); else extra[i] = r; return r.id; }
+  const byId = (id) => saved.find((r) => r.id === id) || extra.find((r) => r.id === id) || BUILTINS.find((r) => r.id === id);
   function resolve(r, depth) {
     if (!r) return resolve(BUILTINS[0]);
     const base = r.base && (depth || 0) < 8 ? resolve(byId(r.base), (depth || 0) + 1) : DEFAULT;
     return merge(base, r);
   }
   const get = (id) => resolve(byId(id) || BUILTINS[0]);
-  const all = () => [...BUILTINS, ...saved].map((r) => resolve(r));
+  const all = () => [...BUILTINS, ...extra, ...saved].map((r) => resolve(r));
 
   async function loadSaved() {
     try {
@@ -210,5 +212,5 @@ vec3 stShade(vec3 w, vec3 n, float isLine, float tone, float fix) {
     }
   }
 
-  window.StyleRecipes = { BUILTINS, DEFAULT, KIND, BUILDING_DEFAULT, styleOf, resolve, get, all, loadSaved, saved: () => saved.slice(), GLSL, values, applyGL, threeUniforms, applyThree, rgb };
+  window.StyleRecipes = { BUILTINS, DEFAULT, KIND, BUILDING_DEFAULT, styleOf, resolve, get, all, register, loadSaved, saved: () => saved.slice(), GLSL, values, applyGL, threeUniforms, applyThree, rgb };
 })();
