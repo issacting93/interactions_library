@@ -86,7 +86,19 @@ vec3 mossed(vec3 c, vec3 N) {
   if (uWet > 0.0) { vec3 V = normalize(uCam - vWorldPos), L = normalize(vec3(0.35, 0.55, -0.6)); float spec = pow(max(dot(reflect(-L, N), V), 0.0), 26.0), sheen = pow(1.0 - max(dot(N, V), 0.0), 3.0);
     c = c * (1.0 - 0.18 * uWet) + uWetC * (spec * 0.9 + sheen * 0.22) * uWet; }   // wet stone: darker, with a hard glint and a sheen at the edges
   float e = etchA(N) * (1.0 - 0.55 * cover);
-  if (e > 0.0) c = mix(c, uEtchC, clamp(e, 0.0, 1.0)) + uEtchC * e * uEtchS.z * 0.6;   // the etching: gold, a little lit
+  if (e > 0.0) {   // the etching: cut metal. The seal's edge tilts the normal (a groove: relief from its screen-space slope), the fill is polished gold lit by a hard glint, a sky-ish reflection and a dark groove at the edge
+    vec3 dpx = dFdx(vWorldPos), dpy = dFdy(vWorldPos), r1 = cross(dpy, N), r2 = cross(N, dpx);
+    float det = dot(dpx, r1), ex = dFdx(e), ey = dFdy(e);
+    vec3 Nb = normalize(abs(det) * N - sign(det) * (ex * r1 + ey * r2) * 0.0032 * uEtchA.w);
+    vec3 V = normalize(uCam - vWorldPos), L = normalize(vec3(0.35, 0.55, -0.6));
+    float ee = smoothstep(0.04, 0.42, e), ndv = max(dot(Nb, V), 0.0), groove = smoothstep(0.0, 0.12, e) * (1.0 - smoothstep(0.12, 0.5, e));
+    float spec = pow(max(dot(reflect(-L, Nb), V), 0.0), 30.0), fres = pow(1.0 - ndv, 2.5), dif = max(dot(Nb, L), 0.0);
+    vec3 metal = uEtchC * (0.5 + 0.55 * dif) + vec3(1.0, 0.93, 0.7) * spec * 1.3 + mix(vec3(0.5, 0.42, 0.22), vec3(0.85, 0.95, 0.9), fres) * fres * 0.6;
+    metal += uEtchC * uEtchS.z * 0.4;
+    c *= 1.0 - 0.5 * groove;   // the cut's shadow in the stone round the metal
+    c = c * (0.85 + 0.3 * (dot(Nb, L) - dot(N, L)));   // and the stone's own light across the cut
+    c = mix(c, metal, ee);
+  }
   return c;
 }
 out vec4 o;
