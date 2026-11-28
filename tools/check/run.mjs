@@ -58,6 +58,19 @@ const CHECKS = [
       assert(errs.length === before, `${f}: ${errs.slice(before).join(" | ")}`);
     }
   }],
+  ["spire-forge", async ({ page, url, errs }) => {
+    // the building generator page: loads, lists the kit, and draws a building (it takes its helpers from ForgeKit)
+    await page.goto(url("world/forges/spire-forge/index.html")); await wait(page, 2500);
+    assert(!errs.length, errs.join(" | "));
+    const info = await page.evaluate(() => ({
+      kit: document.getElementById("kitCount")?.textContent || "",
+      drawn: !!document.querySelector("#stage svg, #stage img, #stage canvas"),
+      kitUtils: typeof window.ForgeKit?.rolesOf,
+    }));
+    assert(/\d+ of \d+/.test(info.kit), `kit species not listed (${JSON.stringify(info.kit)})`);
+    assert(info.drawn, "no building drawn on the stage");
+    assert(info.kitUtils === "function", "ForgeKit not loaded");
+  }],
   ["data-paths", async ({ page, url }) => {
     // every page that reads the shared data must find it: no 404 for a json or svg it asks for
     const pages = [];
