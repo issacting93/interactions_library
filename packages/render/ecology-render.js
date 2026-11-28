@@ -2472,6 +2472,7 @@ void main() { vec3 n = normalize(vN), V = normalize(uCam - vW); if (dot(n, V) < 
 
   window.EcologyRender = {
     FADE,
+    STONE_GL,   // the Golem's stone noise (stones, stoneH, gn3, gf3), for any shader that wants the same stone: World Scene's towers
     buildCore,
     computeCore,
     uploadCore,

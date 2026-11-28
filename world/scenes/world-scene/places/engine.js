@@ -926,6 +926,12 @@
     if (!E) return null;
     return { amount: E.amount ?? 1, size: E.size ?? 0.24, glow: E.glow ?? 0.8, c: hex(E.colour || '#f2c36b') };
   };
+  // the place's stone on the towers (setting.stone { amount, size (1 = the default stone size), seed, colour (the seams) }); null when it has none
+  X.stone = function () {
+    const E = X.P && X.P.setting && X.P.setting.stone;
+    if (!E) return null;
+    return { amount: E.amount ?? 1, size: E.size ?? 1, seed: E.seed ?? 3, c: hex(E.colour || '#14181c') };
+  };
   // the stone's uniforms (towers and city share towerProg): set for the frame, cleared after
   X.mossStone = function (on) {
     const u = towerProg.u,

@@ -80,7 +80,21 @@ uniform float uRoute, uTone;
 ${GROWTH_GLSL}
 uniform float uWet; uniform vec3 uWetC;   // a place's wet stone: a sheen
 ${ETCH_GLSL}
+// a place's stone (setting.stone): the Golem's stones, the same noise Specimen's creatures use (EcologyRender.STONE_GL), laid on the tower wall at its place in the world.
+// uStone 0 = the plain tint. Stones take their own tone, the seams between them go dark, and each stone's height is read as a bump against a light from the upper left
+// (the screen-space gradient of the height). uStoneS = 1 / the stones' size in world units, uStoneC the crack and seam colour.
+${EcologyRender.STONE_GL}
+uniform float uStone, uStoneS, uStoneSeed; uniform vec3 uStoneC;
+vec3 stoned(vec3 c) {
+  highp vec3 P = vWorldPos * uStoneS; highp vec3 st = stones(P, uStoneSeed); float hs = stoneH(st, P, uStoneSeed);
+  float rough = gf3(P * 2.0, uStoneSeed), seam = 1.0 - smoothstep(0.0, 0.1, st.x), tone = gh3(vec3(st.y * 91.7, st.y * 37.1, 5.0), uStoneSeed);
+  float H = hs * 0.7 + (rough - 0.5) * 0.35, lightH = (-dFdx(H) * 0.6 + dFdy(H) * 0.8) * 6.0;   // lit on the sides that face up and to the left
+  c *= (0.74 + 0.5 * tone) * (0.8 + 0.3 * rough) * (1.0 + clamp(lightH, -0.45, 0.45));
+  c = mix(c, uStoneC * (0.35 + 0.4 * tone), seam * 0.85);
+  return c;
+}
 vec3 mossed(vec3 c, vec3 N) {
+  if (uStone > 0.0) c = mix(c, stoned(c), uStone);
   vec3 g; float cover = growCover(N, g);
   if (cover > 0.0) c = mix(c, g, cover);
   if (uWet > 0.0) { vec3 V = normalize(uCam - vWorldPos), L = normalize(vec3(0.35, 0.55, -0.6)); float spec = pow(max(dot(reflect(-L, N), V), 0.0), 26.0), sheen = pow(1.0 - max(dot(N, V), 0.0), 3.0);
@@ -571,6 +585,9 @@ function drawTowers(t, glowPass) {
     gl.uniform1f(u.uUnlit, 0); gl.uniform1f(u.uUseTex, 0); gl.uniform1f(u.uCutout, 0); gl.uniform1f(u.uAlpha, 1.0);
     styleFlat(u, -0.04);
     const et = window.ENVX && ENVX.etch && ENVX.etch();   // the place's gold sigil etchings
+    const sn = window.ENVX && ENVX.stone && ENVX.stone();   // the place's Golem stone
+    gl.uniform1f(u.uStone, sn ? sn.amount : 0);
+    if (sn) { gl.uniform1f(u.uStoneS, 1 / (tankW() / 120 * sn.size)); gl.uniform1f(u.uStoneSeed, sn.seed); gl.uniform3fv(u.uStoneC, sn.c); }
     if (et) { gl.activeTexture(gl.TEXTURE0 + SIG_UNIT); gl.bindTexture(gl.TEXTURE_2D, sigTex); gl.uniform1i(u.uSig, SIG_UNIT); gl.activeTexture(gl.TEXTURE0); gl.uniform3fv(u.uEtchC, et.c); }
     for (let ti = 0; ti < placedTowers.length; ti++) {
       const entry = placedTowers[ti];
@@ -584,6 +601,7 @@ function drawTowers(t, glowPass) {
     }
     gl.bindVertexArray(null);
     gl.uniform1f(u.uEtch, 0);
+    gl.uniform1f(u.uStone, 0);   // the city's buildings share this program and stay plain
     gl.uniform1f(u.uRoute, 0);
     return;
   }

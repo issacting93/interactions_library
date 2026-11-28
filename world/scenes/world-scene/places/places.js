@@ -167,6 +167,7 @@ window.WorldPlaces = {
       shafts: { amount: 0.55, colour: '#9fdcff' },
       wet: { amount: 0.8, colour: '#9fdcff' },
       mist: { amount: 0.3, colour: '#0c2a4a' },
+      stone: { amount: 1, size: 0.6 }, // the Golem's stones (Specimen's noise) on the towers: cells, dark seams, a bump
     }, // wet stone catching the shafts; a blue haze between the towers
     paths: {
       ring: { x: 'center', y: 'center', along: 0.16, across: 0.16, angle: 0, square: 2 },
