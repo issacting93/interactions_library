@@ -468,7 +468,7 @@ const zoomEl = document.getElementById('zoom');
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
   const min = +zoomEl.min, max = +zoomEl.max;
-  const nv = Math.min(max, Math.max(min, +zoomEl.value * Math.exp(-e.deltaY * 0.0012)));
+  const nv = Math.min(max, Math.max(min, +zoomEl.value * Math.exp(-e.deltaY * 0.0016)));
   zoomEl.value = nv.toFixed(3);
   zoomEl.dispatchEvent(new Event('input', { bubbles: true }));
 }, { passive: false });
