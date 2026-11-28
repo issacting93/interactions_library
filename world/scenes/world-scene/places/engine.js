@@ -799,13 +799,20 @@
     return {
       key: X.id + ':' + X.bodies + ':' + X.lookRev + ':' + ((X.moss() || {}).name || ''), // a new season is a new look for the stone creatures
       // the flat fill under a creature's lines (a wing's membrane) in the place's own colours: styled.fill { species: [high, low] } as hex; null: the species' own
+      // styled.lineLook: the outlines take each creature's own look's line colour (as Specimen draws them), not one white for all
       fill: (sp) => {
         const c = Y.fill && Y.fill[sp.key];
-        return c ? [hex(c[0]), hex(c[1] || c[0])] : null;
+        if (c) return [hex(c[0]), hex(c[1] || c[0])];
+        if (!Y.lineLook) return null;
+        const L = styledLook(sp, (window.CreatureLooks || {})[sp.key]),
+          k = L && L.colors && L.colors[3];
+        return k ? [hex(k), hex(k).map((v) => v * 0.7)] : null;
       },
       lines: X.bodies === 'flat',
       look: styled ? styledLook : null,
-      render: styled ? { lineColor: [1, 1, 1], lineAlpha: Y.lineAlpha ?? 0.3, backing: Y.backing ?? 0 } : null,
+      render: styled
+        ? { lineColor: Y.lineLook ? null : [1, 1, 1], lineAlpha: Y.lineAlpha ?? 0.3, backing: Y.backing ?? 0 }
+        : null,
       // how much the stone creatures carry right now (0 to 1), for the renderer's growth override; null for the rest: the place's growth, a little lighter than on the towers
       grow: (sp) => {
         const row = (X.P.cast || []).find((r) => r.species === sp.key),

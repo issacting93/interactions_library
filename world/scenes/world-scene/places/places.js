@@ -64,7 +64,7 @@ window.WorldPlaces = {
         width: 0.08,
         group: 4,
       },
-      { species: 'manta', n: 3, role: 'formation', path: 'sky', z: [0.07, 0.07], speed: 0.42, turn: 40 },
+      { species: 'manta', n: 3, role: 'formation', path: 'sky', z: [0.07, 0.07], speed: 0.42, turn: 20 },
       { species: 'swift', n: 14, role: 'escort', lead: 'manta', z: [0.03, 0.12], back: 7, side: 2.5 },
       { species: 'ringed-lance-monarch', n: 2, role: 'drift', z: [0.01, 0.04], radius: 0.32, speed: 0.25 },
       { species: 'glass-star', n: 10, role: 'drift', layer: 'mid', radius: 0.3, speed: 0.14 },
@@ -80,8 +80,9 @@ window.WorldPlaces = {
       creatures: 'styled',
       styled: {
         base: { material: 'glass', pattern: 'veins', opacity: 0.85, fresnel: 0.6, emissive: 0.2, vein: 0.5 },
-        lineAlpha: 0.16,
-        backing: 0.6,
+        lineAlpha: 0.5,
+        lineLook: true,
+        backing: 0.5,
         looks: {
           manta: {
             material: 'glass',

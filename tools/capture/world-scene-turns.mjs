@@ -8,7 +8,9 @@ import { chromium } from 'playwright';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css' };
 const [id = 'crossing', sp = 'manta'] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
-const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({
+  args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+});
 const page = await browser.newPage({ viewport: { width: 400, height: 260 } });
 page.on('pageerror', (e) => console.log('page error:', e.message));
 await page.addInitScript(() => {
@@ -19,7 +21,11 @@ await page.addInitScript(() => {
 await page.route('http://repo.local/**', (r) => {
   const f = path.join(ROOT, decodeURIComponent(new URL(r.request().url()).pathname));
   if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) return r.fulfill({ status: 404, body: '' });
-  r.fulfill({ status: 200, body: fs.readFileSync(f), contentType: TYPES[path.extname(f)] || 'application/octet-stream' });
+  r.fulfill({
+    status: 200,
+    body: fs.readFileSync(f),
+    contentType: TYPES[path.extname(f)] || 'application/octet-stream',
+  });
 });
 await page.goto('http://repo.local/world/scenes/world-scene/World%20Scene.html');
 await page.waitForFunction(() => window.ENVX && typeof sim !== 'undefined', null, { timeout: 180000 });
@@ -38,8 +44,21 @@ const r = await page.evaluate(
       n = 0;
     for (let i = 0; i < 900; i++) {
       ENVX.step(dt);
-      if (i % 15 === 0 && TRACE) (window.__tr = window.__tr || []).push(fish().map((f) => [+f.ang.toFixed(2), +Math.hypot(f.vx, f.vy).toFixed(0), +(Math.atan2(f.vy, f.vx)).toFixed(2), f.role ? +Math.atan2(f.role.hy, f.role.hx).toFixed(2) : null]));
+      if (i % 15 === 0 && TRACE)
+        (window.__tr = window.__tr || []).push(
+          fish().map((f) => [
+            +f.ang.toFixed(2),
+            +Math.hypot(f.vx, f.vy).toFixed(0),
+            +Math.atan2(f.vy, f.vx).toFixed(2),
+            f.role ? +Math.atan2(f.role.hy, f.role.hx).toFixed(2) : null,
+          ])
+        );
       for (const f of fish()) {
+        ((window.__ext = window.__ext || { x0: 1e9, x1: -1e9, y0: 1e9, y1: -1e9 }),
+          (window.__ext.x0 = Math.min(window.__ext.x0, f.x)),
+          (window.__ext.x1 = Math.max(window.__ext.x1, f.x)),
+          (window.__ext.y0 = Math.min(window.__ext.y0, f.y)),
+          (window.__ext.y1 = Math.max(window.__ext.y1, f.y)));
         const sped = Math.hypot(f.vx || 0, f.vy || 0),
           p = prev.get(f);
         if (p) {
@@ -52,6 +71,7 @@ const r = await page.evaluate(
         } else prev.set(f, { ang: f.ang, sped });
       }
     }
+    window.__pos = window.__pos || [];
     const med = speeds.slice().sort((a, b) => a - b)[speeds.length >> 1] || 1;
     let slowTurn = 0;
     rates.forEach((v, i) => {
@@ -60,7 +80,15 @@ const r = await page.evaluate(
     const q = rates.slice().sort((a, b) => a - b);
     if (window.__trace) return window.__trace;
     if (TRACE) return window.__tr.slice(0, 40);
-    return { n: rates.length, turn95: +q[Math.floor(q.length * 0.95)].toFixed(2), turnMax: +q[q.length - 1].toFixed(2), medSpeed: +med.toFixed(2), slowTurnShare: +(slowTurn / rates.length).toFixed(3) };
+    return {
+      n: rates.length,
+      turn95: +q[Math.floor(q.length * 0.95)].toFixed(2),
+      turnMax: +q[q.length - 1].toFixed(2),
+      medSpeed: +med.toFixed(2),
+      slowTurnShare: +(slowTurn / rates.length).toFixed(3),
+      extent: window.__ext,
+      tank: [tankW(), tankH()],
+    };
   },
   [id, sp, process.argv.includes('--trace')]
 );
