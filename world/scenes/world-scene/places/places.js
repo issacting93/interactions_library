@@ -143,6 +143,8 @@ window.WorldPlaces = {
         hub: 'spireSpire1',
         ring: ['spireLighthouse1', 'spireSpire2', 'spireLighthouse2'],
         floorH: 0.46,
+        layout: 'grid', // square blocks on a pitch, chasms between, causeways across (city-grid.js)
+        grid: { monoliths: 0.3 },
         districts: { dense: { floors_min: 3, floors_max: 6 }, villa: { floors_max: 4 } },
         ruin: 0.12,
       },
