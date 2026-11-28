@@ -767,22 +767,34 @@ window.WorldPlaces = {
   cathedral: {
     moment: { name: 'The light swells', at: 12, len: 7, shaft: 1.1, colour: '#ffd98a', glow: 0.35 },
     title: 'Flooded Cathedral',
-    note: 'A drowned nave under a rose window: gold light down the water, halo monarchs and a seraph rising through it.',
+    story:
+      'The sea took the town in a single winter and stopped half way up the cathedral. The roof fell the year after. The rose window still faces west, and on clear evenings it lights the nave the length of the water. The monarchs keep the old procession from the door to the crossing; nobody has told them the congregation is under their feet.',
+    note: 'A ruined cathedral the size of a city, flooded to half the height of its piers: a nave of arcades open to the sky, a spire at the crossing, a rose window in the west front, the town drowned round it.',
     setting: {
       style: 'relief',
+      // the machine garden's shading: flat bands from a violet ink to a lilac haze; the one warm colour is the gold of the rose, the crossing and the altar
+      recipe: {
+        palette: { ink: '#140f26', fog: '#b4a6cc', line: '#e8def2', warm: '#ffd08a', sky: ['#0e0a1c', '#2c2248', '#6e5e94'], moon: '#f4ecff' },
+        depth: { bands: 6, curve: 1.3, roof: 0.07 },
+        light: { steps: 3, strength: 1, glow: 0.5 },
+        lines: { mode: 'pencil', strength: 0.22 },
+        atmo: { ridges: true, pines: false, moon: false, pilgrims: false, grain: 0.6, vignette: 0.6, bloom: 0.4 },
+      },
+      bands: [0.55, 2.3],
+      // one building for a city (packages/city/city-nave.js): the crossing spire is the main tower, Spire Forge towers stand on the west front and the chapels
       city: {
         seed: 1123,
-        towers: 6,
-        hub: 'arcane',
-        ring: ['spireSpire2', 'spireSpire1', 'gilded'],
-        floorH: 0.5,
-        districts: { shrine: { count: 10 }, sanctum: { solid: 0.15 }, market: { count: 0 } },
-        ruin: 0.18,
+        layout: 'nave',
+        nave: { bays: 4, bay: 2.4, ruin: 0.3, waterY: 3.3 },
+        towers: 0,
+        hub: 'spireSpire1',
+        hubH: 1.8,
+        sites: { west: 'spireSpire2', chapel: 'spireShrine2' },
       },
       center: 'tower',
       snow: false,
       glow: 0.9,
-      vignette: 0.75,
+      vignette: 0.6,
       dz: 0.9,
       iris: 1,
       water: {
@@ -796,14 +808,14 @@ window.WorldPlaces = {
         fogK: 0.0003,
         scale: 440,
       },
-      surface: { level: 0.02, colour: '#8a6fb8', opacity: 0.14, ribbons: 0.4 },
-      shafts: { amount: 1, colour: '#ffd98a' },
-      wet: { amount: 1, colour: '#ffe6b0' },
-      mist: { amount: 0.22, colour: '#2a1a4a' },
+      surface: { cityY: 3.3, colour: '#8a6fb8', opacity: 0.3, ribbons: 0.5 }, // half way up the piers
+      shafts: { amount: 0.5, colour: '#ffd98a' },
+      wet: { amount: 0.4, colour: '#ffe6b0' },
+      mist: { amount: 0.12, colour: '#2a1a4a' },
     },
     paths: {
-      ring: { x: 'center', y: 'center', along: 0.16, across: 0.16, angle: 0, square: 2 },
-      nave: { x: 'center', y: 'center', along: 0.34, across: 0.34, angle: 0, square: 2 },
+      ring: { x: 'center', y: 'center', along: 0.13, across: 0.13, angle: 0, square: 3 }, // round the crossing, through the aisles
+      nave: { x: 'center', y: 0.3, along: 0.045, across: 0.15, angle: 0, square: 3 }, // down the nave and back, door to crossing
       wide: { x: 'center', y: 'center', along: 0.4, across: 0.5, angle: 25, square: 2 },
     },
     // the nave: halo monarchs in procession round the tower, crowned lancers against them, the seraph high in the light, votive wisps, Showa below
@@ -813,7 +825,7 @@ window.WorldPlaces = {
         n: 7,
         role: 'stream',
         path: 'nave',
-        z: [0.15, 0.4],
+        z: [0.56, 0.68],
         speed: 0.22,
         width: 0.05,
         group: 7,
@@ -828,16 +840,16 @@ window.WorldPlaces = {
         speed: 0.3,
         width: 0.05,
       },
-      { species: 'halo-eyed-seraph', n: 1, role: 'drift', z: [0.03, 0.08], radius: 0.16, speed: 0.15 },
+      { species: 'halo-eyed-seraph', n: 1, role: 'drift', z: [0.12, 0.2], radius: 0.1, speed: 0.15 },
       { species: 'ringed-lance-monarch', n: 3, role: 'drift', layer: 'air', radius: 0.35, speed: 0.22 },
-      { species: 'wisp', n: 22, role: 'drift', z: [0.2, 0.7], radius: 0.4, speed: 0.15, bob: 0.04 },
-      { species: 'koi-longfin-showa', n: 10, role: 'stream', path: 'ring', z: [0.7, 0.86], speed: 0.35, width: 0.06 },
+      { species: 'wisp', n: 22, role: 'drift', z: [0.55, 0.72], radius: 0.3, speed: 0.12, bob: 0.03 },
+      { species: 'koi-longfin-showa', n: 10, role: 'stream', path: 'ring', z: [0.79, 0.87], speed: 0.35, width: 0.05 },
     ],
     flora: { kind: 'nave', amount: 0.8, ink: '#1c1428' },
     shots: [
-      { kind: 'lookup', len: 12, target: 'center' },
-      { kind: 'descent', len: 11, target: 'center' },
-      { kind: 'orbit', len: 11, target: 'center' },
+      { kind: 'view', len: 12, at: [0, -3.4, 4.6], to: [0, -1.2, 5.4], turn: [175, 185], tilt: [87, 93], dist: [9.4, 8.6] }, // in at the west door, down the nave to the crossing
+      { kind: 'view', len: 11, at: [0, 0, 4], turn: [25, 70], tilt: [44, 52], dist: [40, 34] }, // the whole plan from the air
+      { kind: 'view', len: 11, at: [0, -12, 6], to: [0, -12, 6.5], turn: [150, 205], tilt: [74, 80], dist: [17, 14] }, // the west front and its rose
     ],
     look: {
       creatures: 'styled',

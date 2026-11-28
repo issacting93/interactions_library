@@ -199,7 +199,8 @@ function rebuildCityCreatureGeometry() {
     grammarCity = CityGrammar.build(lastCitySeed, sheet, Object.assign({}, opts, { pins: Object.assign({}, opts.pins || {}, { lots }) }));
   }
   // layout 'grid': square blocks, chasms and causeways (packages/city/city-grid.js) in place of the radial grammar's drawing; the grammar still runs, for the rest of the host
-  const m = P && P.layout === 'grid' ? CityGrid.build(lastCitySeed, Object.assign({ reserve, floorH: P.floorH, levelStep: P.levelStep }, P.grid || {}))
+  const m = P && P.layout === 'nave' ? CityNave.build(lastCitySeed, P.nave || {})   // one ruined cathedral the size of the city (packages/city/city-nave.js)
+    : P && P.layout === 'grid' ? CityGrid.build(lastCitySeed, Object.assign({ reserve, floorH: P.floorH, levelStep: P.levelStep }, P.grid || {}))
     : CityGrammarMesh.build(grammarCity, { tower: false, outskirts: false });
   const seq = (n) => { const ix = new Uint32Array(n); for (let i = 0; i < n; i++) ix[i] = i; return ix; };
   for (const [k, tone] of [['ground', 0.02], ['water', 0.22], ['green', -0.12], ['bldg', -0.1]]) {

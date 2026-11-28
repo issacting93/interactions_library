@@ -115,7 +115,8 @@ function placeTowersForCity(wfc, seed, cityScale, tankX, tankY, reservedClusters
   const cityDiameter = 2 * CITY_FOOTPRINT_FRAC * tankW();
   const maxTowerHeight = cityDiameter * 0.25;
   const centerSeed = Math.floor(rnd() * 1e9);
-  const centerTower = buildPlacedTower(TP[centerKey], centerSeed, tankX, tankY, towerScaleForHeight(TP[centerKey], centerSeed, maxTowerHeight));
+  const hubH = maxTowerHeight * ((cityPlan && cityPlan.hubH) || 1);   // a place's taller (or shorter) main tower
+  const centerTower = buildPlacedTower(TP[centerKey], centerSeed, tankX, tankY, towerScaleForHeight(TP[centerKey], centerSeed, hubH));
   centerTower.revealRank = 0; centerTower.forgeKey = pool.forge ? centerKey : null; centerTower.site = 0; centerTower.plan = { seed: centerSeed, targetHeight: maxTowerHeight };   // the hub appears first -- "solved outward from the Great Mosque" (see Growth's own note), same framing as the city reveal
   out.push(centerTower);
   // Growth reveal (2026-11-03 follow-up): ring towers now gate on the SAME cityRevealStart/-Speed
@@ -145,6 +146,16 @@ function placeTowersForCity(wfc, seed, cityScale, tankX, tankY, reservedClusters
     tw.forgeKey = pool.forge ? key : null; tw.site = out.length; tw.plan = cluster.plan;
     tw.revealRank = Number.isFinite(minRank) ? minRank : 0;
     out.push(tw);
+  }
+  // a layout's own sites (the cathedral's west towers and chapels): a tower stood by hand at each, its design by the site's role
+  if (cityPlan && cityPlan.layout === 'nave' && window.CityNave) {
+    const by = cityPlan.sites || {};
+    for (const st of CityNave.plan(cityPlan.nave).sites) {
+      const key = TP[by[st.role]] ? by[st.role] : centerKey, sd = Math.floor(rnd() * 1e9), h = st.h * cityScale;
+      const tw = buildPlacedTower(TP[key], sd, tankX + st.x * cityScale, tankY + st.z * cityScale, towerScaleForHeight(TP[key], sd, h));
+      tw.forgeKey = null; tw.site = out.length; tw.plan = { key, spec: TP[key], seed: sd, targetHeight: h }; tw.revealRank = 0;
+      out.push(tw);
+    }
   }
   return out;
 }

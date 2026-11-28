@@ -15,6 +15,7 @@ const grammarReady = CityGrammar.load().then(sh => { grammarSheet = sh; }).catch
 // the terrace a tank position stands on, as a lift in tank units (towers and walkers stand on it)
 function cityLiftAt(tx, ty) {
   const s = (tankW() * 0.4) / 15.3, r = Math.hypot(tx - tankW() / 2, ty - tankH() / 2) / s;
+  if (typeof cityPlan !== 'undefined' && cityPlan && cityPlan.layout === 'nave' && window.CityNave) return CityNave.groundY((tx - tankW() / 2) / s, (ty - tankH() / 2) / s, cityPlan.nave) * s;   // the cathedral's plinth
   return CityGrammar.groundY(r) * s;
 }
 

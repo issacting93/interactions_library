@@ -257,6 +257,11 @@
         };
       case 'orbit':
         return { c: [c[0], c[1], TD * 0.62], yaw: y0 + 80 + v * 60, tilt: 74, dist: (TH * 0.22) / zm };
+      case 'view': {
+        // a framing set by hand, in city units (x, z across the plan, y up from the sea bed): at -> to, with yaw, tilt and dist as one value or [from, to]
+        const k = (tankW() * 0.4) / 15.3, e = ease(v), a = sh.at || [0, 0, 3], b = sh.to || a, L = (q, d) => (Array.isArray(q) ? lerp(q[0], q[1], e) : q != null ? q : d);
+        return { c: [R.c[0] + lerp(a[0], b[0], e) * k, R.c[1] + lerp(a[1], b[1], e) * k, TD * 0.92 - lerp(a[2], b[2], e) * k], yaw: y0 + L(sh.turn, 180), tilt: L(sh.tilt, 80), dist: (L(sh.dist, 12) * k) / zm };
+      }
       case 'lookup':
         return {
           c: [c[0] + tankW() * 0.05, c[1], TD * 0.45],
@@ -340,7 +345,7 @@
     }
   };
   X.writeSaved = writeSaved;
-  const PLACES_V = 5; // the built-in places' version: raise it when they are redesigned
+  const PLACES_V = 6; // the built-in places' version: raise it when they are redesigned
   function keep() {
     const s = saved();
     if (X.P && X.id !== 'world') {
@@ -439,6 +444,8 @@
   }
   function applySetting() {
     const st = X.P.setting || {};
+    // surface.cityY: the water's height in city units above the sea bed (the cathedral: half way up the piers), turned into the tank's level
+    if (st.surface && st.surface.cityY != null) st.surface.level = Math.max(0.02, (tankDepth() * 0.92 - st.surface.cityY * ((tankW() * 0.4) / 15.3)) / tankDepth());
     // a place's own recipe (setting.recipe: palette, depth, light, lines, atmo over Route Zero): registered under the place's id, then set like any style
     if (st.recipe && window.StyleRecipes && StyleRecipes.register) {
       const rid = StyleRecipes.register(Object.assign({ id: 'place-' + X.id, name: X.P.title, base: 'route-zero' }, st.recipe));

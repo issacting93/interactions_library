@@ -553,6 +553,11 @@ function rebuildRouteAtmo(seed, tankX, tankY, baseZ, cityRadius) {
   const towers = placedTowers.map((tw) => ({ x: tw.pos[0], y: tw.pos[1], height: tw.scale * tw.built.top + cityLiftAt(tw.pos[0], tw.pos[1]) }));
   atmoWorld = RouteAtmoGL2.buildWorld(gl, routeAtmoCtx, seed, { cx: tankX, cy: tankY, baseZ, cityRadius, tankW: tankW(), tankH: tankH(), tankDepth: tankDepth(), hub, towers,
     gateAngle: CityGrammar.spokesOf(seed)[0] });   // the road leaves by the first avenue's gate
+  // a layout's own lanterns (the cathedral's rose, crossing, altar) come before the towers', so they are among the eight the recipe lights
+  if (cityPlan && cityPlan.layout === 'nave' && window.CityNave) {
+    const k = (tankW() * 0.4) / 15.3;
+    atmoWorld.lights = CityNave.plan(cityPlan.nave).lanterns.map((L) => ({ x: tankX + L.x * k, y: tankY + L.z * k, z: baseZ - L.y * k, radius: L.r * k })).concat(atmoWorld.lights);
+  }
 }
 
 // the old box/lathe tier shell (TowerEngineGL2's "blocks") is no longer the tower's visible
